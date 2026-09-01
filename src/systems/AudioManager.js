@@ -1,0 +1,10 @@
+export class AudioManager{
+ constructor(){const saved=JSON.parse(localStorage.getItem('towerdefnapst.settings')||'{}');this.music=saved.music??.3;this.sfx=saved.sfx??.65;this.muted=saved.muted??false;this.ctx=null;this.ambient=null;}
+ ensure(){if(!this.ctx)this.ctx=new (window.AudioContext||window.webkitAudioContext)();if(this.ctx.state==='suspended')this.ctx.resume();}
+ save(){localStorage.setItem('towerdefnapst.settings',JSON.stringify({music:this.music,sfx:this.sfx,muted:this.muted}));}
+ tone(freq=300,d=.08,type='sine',gain=.05){if(this.muted||this.sfx<=0)return;this.ensure();const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type=type;o.frequency.setValueAtTime(freq,this.ctx.currentTime);o.frequency.exponentialRampToValueAtTime(Math.max(60,freq*.55),this.ctx.currentTime+d);g.gain.setValueAtTime(gain*this.sfx,this.ctx.currentTime);g.gain.exponentialRampToValueAtTime(.0001,this.ctx.currentTime+d);o.connect(g).connect(this.ctx.destination);o.start();o.stop(this.ctx.currentTime+d);}
+ play(name){const m={shoot:[420,.055,'triangle',.025],impact:[150,.09,'square',.035],build:[620,.13,'sine',.06],upgrade:[860,.2,'sine',.07],wave:[260,.35,'triangle',.06],boss:[92,.55,'sawtooth',.06],leak:[120,.2,'square',.05]};if(m[name])this.tone(...m[name]);}
+ setMusic(v){this.music=Number(v);this.save();}
+ setSfx(v){this.sfx=Number(v);this.save();}
+ toggleMute(){this.muted=!this.muted;this.save();return this.muted;}
+}

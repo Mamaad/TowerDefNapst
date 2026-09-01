@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#07131b" />
+  <title>TowerDefNapst — Arcane Bastion</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="hud" aria-label="État de la partie">
+      <div class="brand"><span class="brand-rune">✦</span><div><strong>ARCANE BASTION</strong><small>TowerDefNapst</small></div></div>
+      <div class="stat"><span>❤</span><div><small>VIES</small><b id="lives">30</b></div></div>
+      <div class="stat"><span>◈</span><div><small>OR</small><b id="gold">0</b></div></div>
+      <div class="stat"><span>◇</span><div><small>VAGUE</small><b id="wave">0 / 30</b></div></div>
+      <div class="stat"><span>✧</span><div><small>SCORE</small><b id="score">0</b></div></div>
+      <div class="stat"><span>↗</span><div><small>REVENU</small><b id="income">0</b></div></div>
+      <div class="hud-actions">
+        <button id="pauseBtn" class="hud-btn" title="Pause (Espace)">Ⅱ</button>
+        <div class="speed-group" aria-label="Vitesse"><button data-speed="1" class="active">×1</button><button data-speed="2">×2</button><button data-speed="3">×3</button></div>
+        <button id="waveBtn" class="primary">Lancer vague</button>
+      </div>
+    </header>
+
+    <main class="game-shell">
+      <section class="viewport-wrap">
+        <canvas id="game" width="1600" height="900" aria-label="Carte du Tower Defense"></canvas>
+        <div id="waveBanner" class="wave-banner"></div>
+        <div id="toast" class="toast"></div>
+        <div id="debug" class="debug-panel hidden"></div>
+        <div class="help-chip">D : debug · Espace : pause · Échap : annuler</div>
+      </section>
+
+      <aside class="side-panel">
+        <section class="panel-section">
+          <div class="section-title"><span>ARSENAL ÉLÉMENTAIRE</span><small>Cliquez puis placez sur un socle</small></div>
+          <div id="buildMenu" class="build-grid"></div>
+        </section>
+        <section id="towerPanel" class="panel-section selection-panel empty">
+          <div class="empty-selection"><div class="sigil">✦</div><strong>Aucune tour sélectionnée</strong><span>Sélectionnez une tour pour l'améliorer, la vendre ou changer sa cible.</span></div>
+          <div class="tower-selection hidden">
+            <div class="tower-heading"><div><span id="towerElement" class="element-pill"></span><h2 id="towerName"></h2></div><b id="towerLevel"></b></div>
+            <p id="towerDescription"></p>
+            <div class="metrics">
+              <div><small>DÉGÂTS</small><b id="towerDamage"></b></div><div><small>DPS</small><b id="towerDps"></b></div>
+              <div><small>PORTÉE</small><b id="towerRange"></b></div><div><small>CADENCE</small><b id="towerRate"></b></div>
+            </div>
+            <div class="special" id="towerSpecial"></div>
+            <label class="targeting">Priorité<select id="targetSelect"><option value="first">Premier</option><option value="last">Dernier</option><option value="strong">Plus fort</option><option value="weak">Plus faible</option><option value="closest">Plus proche</option></select></label>
+            <div class="tower-actions"><button id="upgradeBtn" class="primary"></button><button id="sellBtn">Vendre</button></div>
+          </div>
+        </section>
+        <section class="panel-section compact settings">
+          <div><span>Audio</span><button id="muteBtn">🔊</button></div>
+          <label>Musique <input id="musicVolume" type="range" min="0" max="1" step="0.05" value="0.3" /></label>
+          <label>SFX <input id="sfxVolume" type="range" min="0" max="1" step="0.05" value="0.65" /></label>
+        </section>
+      </aside>
+    </main>
+
+    <div id="gameOver" class="modal hidden">
+      <div class="modal-card"><div class="sigil large">✦</div><h1>Le Nexus est tombé</h1><p id="gameOverStats"></p><button id="restartBtn" class="primary">Recommencer</button></div>
+    </div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
