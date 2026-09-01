@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { EnvironmentRenderer } from '../src/render/EnvironmentRenderer.js';
+import { TowerRenderer } from '../src/render/TowerRenderer.js';
+import { EnemyRenderer } from '../src/render/EnemyRenderer.js';
+import { VfxRenderer } from '../src/render/VfxRenderer.js';
+import { TOWERS } from '../src/config/towers.js';
+import { ENEMIES } from '../src/config/enemies.js';
+import { BUILD_PADS } from '../src/config/map.js';
+import { Tower } from '../src/entities/Tower.js';
+import { Enemy } from '../src/entities/Enemy.js';
+
+const gradient={addColorStop(){}};
+const noop=()=>{};
+const ctx=new Proxy({}, {get(target,prop){if(prop in target)return target[prop];if(prop==='createLinearGradient'||prop==='createRadialGradient')return()=>gradient;if(prop==='filter')return 'none';return noop;},set(target,prop,value){target[prop]=value;return true;}});
+const game={towers:[],enemies:[],projectiles:[],nexusPulse:0,particles:{items:[],rings:[],beams:[],texts:[]}};
+const env=new EnvironmentRenderer(game);env.drawStatic(ctx);env.portals(ctx,1.2);env.padsDynamic(ctx,1,'ember-spire',BUILD_PADS[0],[]);env.ambient(ctx,1);
+const towers=new TowerRenderer(game);TOWERS.forEach((def,i)=>{const tower=new Tower(def,BUILD_PADS[i%BUILD_PADS.length]);tower.level=i%3+1;tower.angle=.6;towers.draw(ctx,tower,1.1);towers.drawRange(ctx,tower,1.1);});
+const enemies=new EnemyRenderer(game);Object.values(ENEMIES).forEach((def,i)=>{const enemy=new Enemy(def,1);enemy.x=200+i*30;enemy.y=300+(i%3)*20;enemy.angle=.4;enemy.effects.set(i%2?'burn':'slow',{remaining:1,amount:.2});enemies.draw(ctx,enemy,1.3);});
+const vfx=new VfxRenderer(game);game.projectiles=[{element:'fire',kind:'meteor',x:100,y:100,prevX:80,prevY:100,spin:0},{element:'ice',kind:'shard',x:120,y:110,prevX:100,prevY:110,spin:.2}];game.particles={items:[{life:.4,max:.5,x:1,y:1,rot:0,type:'smoke',r:3,color:'#fff',glow:0}],rings:[{life:.2,max:.3,x:1,y:1,from:2,to:20,color:'#fff',width:2,aspect:1}],beams:[{life:.1,max:.2,color:'#fff',points:[{x:0,y:0},{x:4,y:4}]}],texts:[{life:.3,max:.5,x:0,y:0,text:'42',color:'#fff',size:12}]};vfx.projectiles(ctx,1);vfx.particles(ctx);
+assert.equal(TOWERS.length,12);assert.ok(Object.keys(ENEMIES).length>=10);console.log('Renderer smoke tests passed');

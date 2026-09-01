@@ -1,8 +1,5 @@
-[workspace]
+[project]
 name = "towerdefnapst"
-version = "0.1.0"
-description = "Fantasy elemental tower defense"
-authors = ["TowerDefNapst contributors"]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 
@@ -10,5 +7,5 @@ platforms = ["linux-64"]
 nodejs = ">=20,<23"
 
 [tasks]
-dev = "node scripts/dev-server.mjs"
+dev = { cmd = "node scripts/dev-server.mjs", env = { HOST = "0.0.0.0", PORT = "4425" } }
 check = "npm run check"

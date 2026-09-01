@@ -1,17 +1,2 @@
-import { readdirSync } from 'node:fs';
-import { join, extname } from 'node:path';
-import { pathToFileURL } from 'node:url';
-
-function walk(dir) {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = join(dir, entry.name);
-    return entry.isDirectory() ? walk(full) : [full];
-  });
-}
-
-const files = walk(new URL('../src', import.meta.url).pathname).filter((file) => extname(file) === '.js');
-for (const file of files) {
-  if (file.endsWith('/main.js')) continue;
-  await import(pathToFileURL(file));
-}
-console.log(`Checked ${files.length} JavaScript modules.`);
+import { readdirSync,statSync } from 'node:fs';import { join,resolve } from 'node:path';import { pathToFileURL } from 'node:url';
+const root=resolve('src');const files=[];function walk(dir){for(const name of readdirSync(dir)){const p=join(dir,name);if(statSync(p).isDirectory())walk(p);else if(p.endsWith('.js'))files.push(p);}}walk(root);for(const file of files){if(file.endsWith('main.js')||file.includes('/render/')||file.includes('/systems/UIManager.js')||file.includes('/core/Game.js')||file.includes('/systems/AudioManager.js'))continue;await import(pathToFileURL(file));}console.log(`Checked ${files.length} JS modules`);

@@ -1,7 +1,1 @@
-export class GameState{
-  constructor(){this.reset();}
-  reset(){this.lives=30;this.gold=550;this.wave=0;this.score=0;this.income=60;this.speed=1;this.paused=false;this.gameOver=false;this.victory=false;this.elapsed=0;}
-  canSpend(v){return this.gold>=v;}
-  spend(v){if(!this.canSpend(v))return false;this.gold-=v;return true;}
-  reward(v){this.gold+=v;this.score+=v*10;}
-}
+export class GameState{constructor(){this.reset();}reset(){this.lives=30;this.gold=550;this.wave=0;this.score=0;this.income=60;this.speed=1;this.paused=false;this.gameOver=false;this.victory=false;this.elapsed=0;this.kills=0;}canSpend(v){return this.gold>=v;}spend(v){if(!this.canSpend(v))return false;this.gold-=v;return true;}reward(v){this.gold+=v;this.score+=v*10;}}
