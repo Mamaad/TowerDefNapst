@@ -1,31 +1,326 @@
-import { WORLD,PATH,BUILD_PADS,DECOR } from '../config/map.js';
-import { hash,ellipse,polygon,pathSamples,glow,noGlow,colorWithAlpha } from './drawing.js';
+import * as THREE from 'three';
+import { BUILD_PADS, DECOR, PATH } from '../config/map.js';
+import { ELEMENTS } from '../config/elements.js';
+import {
+  SCENE_SCALE,
+  GROUND_Y,
+  toScene,
+  material,
+  emissiveMaterial,
+  cylinder,
+  box,
+  crystal,
+  torus,
+  seeded,
+  setShadow,
+} from './drawing.js';
 
-export class EnvironmentRenderer{
- constructor(game){this.game=game;this.cobbleSamples=pathSamples(PATH,34,8);this.edgeSamples=pathSamples(PATH,58,2);}
- drawStatic(c){this.terrain(c);this.path(c);this.props(c);this.padBases(c);this.portalStone(c,PATH[0].x,PATH[0].y,'entry');this.portalStone(c,PATH.at(-1).x,PATH.at(-1).y,'nexus');this.vignette(c);}
- terrain(c){const g=c.createLinearGradient(0,0,0,WORLD.height);g.addColorStop(0,'#263e30');g.addColorStop(.48,'#20372c');g.addColorStop(1,'#182b24');c.fillStyle=g;c.fillRect(0,0,WORLD.width,WORLD.height);
-  for(let i=0;i<520;i++){const x=hash(i*2.11+5)*WORLD.width,y=hash(i*4.07+9)*WORLD.height,r=hash(i+81);if(r<.54){c.strokeStyle=r<.22?'#5b704b3d':'#365e443f';c.lineWidth=.7+hash(i+3);c.beginPath();c.moveTo(x,y);c.lineTo(x+(hash(i+44)-.5)*5,y-4-hash(i+9)*6);c.stroke();}else if(r<.68){c.fillStyle=r<.61?'#d4b36b66':'#c47c7960';c.beginPath();c.arc(x,y,1+hash(i+7)*1.3,0,Math.PI*2);c.fill();}else if(r<.83){ellipse(c,x,y,1.5+hash(i)*2,.7+hash(i+1),'#71806a4a');}}
-  for(let i=0;i<70;i++){const x=hash(i*13+20)*WORLD.width,y=hash(i*17+2)*WORLD.height;if(this.nearPath(x,y,74))continue;const s=3+hash(i+41)*4;c.fillStyle='#18251d66';c.beginPath();c.arc(x,y+2,s,0,Math.PI*2);c.fill();c.fillStyle=hash(i)>.5?'#40573d':'#304c39';c.fillRect(x-.5,y-s,1,s);}
- }
- nearPath(x,y,margin){for(let i=0;i<PATH.length-1;i++){const a=PATH[i],b=PATH[i+1],dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy;const t=Math.max(0,Math.min(1,((x-a.x)*dx+(y-a.y)*dy)/l2)),px=a.x+t*dx,py=a.y+t*dy;if((x-px)**2+(y-py)**2<margin**2)return true;}return false;}
- path(c){c.save();c.lineCap='round';c.lineJoin='round';const trace=()=>{c.beginPath();PATH.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));};
-  trace();c.strokeStyle='#0b1510a8';c.lineWidth=116;c.stroke();trace();c.strokeStyle='#40513c';c.lineWidth=103;c.stroke();trace();c.strokeStyle='#615d43';c.lineWidth=91;c.stroke();trace();c.strokeStyle='#81785a';c.lineWidth=80;c.stroke();trace();c.strokeStyle='#8e8463';c.lineWidth=68;c.stroke();
-  for(let i=0;i<this.cobbleSamples.length;i++){const p=this.cobbleSamples[i],seed=i*11.7,w=18+hash(seed)*16,h=9+hash(seed+2)*7,side=(hash(seed+8)-.5)*37;c.save();c.translate(p.x-Math.sin(p.angle)*side,p.y+Math.cos(p.angle)*side);c.rotate(p.angle+(hash(seed+5)-.5)*.24);const shade=82+Math.floor(hash(seed+3)*28);c.fillStyle=`rgb(${shade+24},${shade+19},${shade})`;c.strokeStyle='#514d3c88';c.lineWidth=1;c.beginPath();c.roundRect(-w/2,-h/2,w,h,3);c.fill();c.stroke();c.strokeStyle='#bdb08325';c.beginPath();c.moveTo(-w*.3,-h*.2);c.lineTo(w*.18,-h*.34);c.stroke();c.restore();}
-  for(let i=0;i<this.edgeSamples.length;i++){const p=this.edgeSamples[i],seed=i*19.3,side=hash(seed)>.5?1:-1,off=48+hash(seed+1)*10,x=p.x-Math.sin(p.angle)*off*side,y=p.y+Math.cos(p.angle)*off*side;if(hash(seed+2)>.35){c.fillStyle='#77715a';ellipse(c,x,y,3+hash(seed)*4,1.8+hash(seed+3)*2,'#656650');}if(hash(seed+4)>.52){c.strokeStyle='#4f6d42aa';c.beginPath();c.moveTo(x,y);c.lineTo(x+side*2,y-6);c.stroke();}}
-  trace();c.strokeStyle='#c9bc8b18';c.lineWidth=40;c.stroke();c.restore();
- }
- props(c){const ordered=[...DECOR].sort((a,b)=>a.y-b.y);for(const d of ordered){c.save();c.translate(d.x,d.y);c.scale(d.scale,d.scale);if(d.type==='tree')this.tree(c,d);else if(d.type==='rock')this.rock(c,d);else if(d.type==='ruin')this.ruin(c,d);else if(d.type==='bush')this.bush(c,d);else this.crystal(c,d);c.restore();}}
- tree(c,d){ellipse(c,7,22,31,9,'#07100dab');const trunk=c.createLinearGradient(-8,0,10,0);trunk.addColorStop(0,'#30241c');trunk.addColorStop(.52,'#654a34');trunk.addColorStop(1,'#261c17');polygon(c,[[-7,20],[-5,-34],[7,-36],[10,20]],trunk);c.strokeStyle='#9273573d';c.lineWidth=1;c.beginPath();c.moveTo(-1,-30);c.lineTo(2,15);c.stroke();const palettes=[['#244d34','#3e6b42','#648151'],['#284f36','#467447','#708957'],['#1f4934','#376640','#5d7c4f'],['#2b5438','#4a7648','#76905a']],pal=palettes[d.variant%palettes.length];const crown=(oy,scale,shade)=>{const pts=[[-2,-48],[-19,-41],[-13,-34],[-35,-29],[-25,-19],[-44,-11],[-30,-1],[-39,9],[-17,13],[0,20],[17,13],[39,9],[30,-1],[44,-11],[25,-19],[35,-29],[13,-34],[19,-41]];const mapped=pts.map(([x,y],i)=>[x*scale+(i%3===0?(d.variant-1.5)*1.2:0),oy+y*scale]);polygon(c,mapped,pal[shade],'#17352388',1);};crown(-18,1,0);crown(-28,.78,1);crown(-39,.56,2);c.fillStyle='#b1c07a35';for(let i=0;i<7;i++){const x=-21+i*7+(d.variant%2)*2,y=-57-(i%3)*5;polygon(c,[[x-3,y],[x,y-2],[x+3,y],[x,y+1]],'#a9bd7838');}}
- bush(c,d){ellipse(c,0,9,23,7,'#07100daa');const pts=[[-27,5],[-22,-7],[-13,-9],[-9,-18],[2,-14],[9,-20],[16,-11],[26,-8],[24,5],[12,10],[0,8],[-12,12]];polygon(c,pts,d.variant%2?'#355d3c':'#3d6640','#1b3825',1);polygon(c,[[-18,-4],[-9,-13],[0,-9],[7,-16],[17,-7],[9,0],[0,-2],[-9,3]],d.variant%2?'#52784b':'#5a814f');for(let i=0;i<4;i++){const x=-12+i*8,y=-8-(i%2)*5;polygon(c,[[x-2,y],[x,y-3],[x+2,y],[x,y+2]],'#a7b96b55');}}
- rock(c,d){ellipse(c,3,15,29,9,'#0b1310a6');const pts=[[-24,10],[-17,-15],[-4,-27],[16,-20],[27,4],[13,18],[-8,20]];polygon(c,pts,'#56635d','#26332f',2);polygon(c,[[-17,-15],[-4,-27],[16,-20],[8,-2],[-7,1]],'#78847b');polygon(c,[[-24,10],[-17,-15],[-7,1],[-8,20]],'#434f4a');c.strokeStyle='#94a09640';c.beginPath();c.moveTo(-4,-27);c.lineTo(-7,1);c.lineTo(13,18);c.stroke();c.strokeStyle='#6e8b5a88';c.lineWidth=2;c.beginPath();c.moveTo(-16,9);c.quadraticCurveTo(-7,4,2,7);c.stroke();}
- ruin(c,d){ellipse(c,0,20,34,10,'#0a120f99');const col=(x,y,h)=>{const g=c.createLinearGradient(x-9,0,x+9,0);g.addColorStop(0,'#3f4943');g.addColorStop(.55,'#7c857d');g.addColorStop(1,'#4e5751');c.fillStyle=g;c.fillRect(x-9,y,18,h);c.fillStyle='#879087';c.fillRect(x-13,y-5,26,7);c.fillStyle='#39443e';for(let yy=y+7;yy<y+h;yy+=9)c.fillRect(x-8,yy,16,1);};col(-16,-38,58);col(17,-55,75);c.strokeStyle='#30483a';c.lineWidth=3;c.beginPath();c.moveTo(-17,0);c.quadraticCurveTo(0,-25,17,-10);c.stroke();}
- crystal(c,d){ellipse(c,0,14,24,8,'#0b1513a8');const col=d.variant%2?'#6ee8d0':'#9d6cff';glow(c,col,20);polygon(c,[[-7,11],[-10,-18],[-2,-38],[6,-14],[4,12]],colorWithAlpha(col,.82),colorWithAlpha('#eaffff',.35));polygon(c,[[3,13],[8,-12],[15,-25],[17,-3],[12,14]],colorWithAlpha(col,.62));polygon(c,[[-17,12],[-18,-8],[-12,-20],[-8,1],[-9,13]],colorWithAlpha(col,.5));noGlow(c);}
- padBases(c){for(const pad of BUILD_PADS){c.save();c.translate(pad.x,pad.y);ellipse(c,2,10,34,10,'#0a120f8c');const slab=[[-30,0],[-18,-13],[16,-13],[30,-1],[18,13],[-17,13]];polygon(c,slab,'#424c46','#222b27',2);polygon(c,[[-24,-1],[-14,-9],[13,-9],[24,-1],[13,7],[-14,7]],'#303a35','#69766b42',1);c.strokeStyle='#8b998552';c.lineWidth=1.2;for(let i=0;i<6;i++){const a=i*Math.PI/3;c.beginPath();c.moveTo(Math.cos(a)*8,Math.sin(a)*4-1);c.lineTo(Math.cos(a)*17,Math.sin(a)*8-1);c.stroke();}c.restore();}}
- portalStone(c,x,y,type){c.save();c.translate(x,y);ellipse(c,0,31,57,16,'#07100db5');ellipse(c,0,25,46,14,type==='nexus'?'#514956':'#465650','#232d29',2);for(const sx of [-1,1]){c.save();c.translate(sx*33,0);polygon(c,[[-12,28],[-9,-23],[-3,-48],[10,-43],[13,25]],sx<0?'#46524d':'#59635d','#222b27',2);c.fillStyle='#78827a';c.fillRect(-13,-43,26,8);c.restore();}c.strokeStyle=type==='nexus'?'#6c6073':'#626d66';c.lineWidth=10;c.beginPath();c.arc(0,-7,37,Math.PI,Math.PI*2);c.stroke();c.strokeStyle='#29342f';c.lineWidth=5;c.beginPath();c.arc(0,-7,37,Math.PI,Math.PI*2);c.stroke();if(type==='nexus'){polygon(c,[[-18,25],[-12,6],[12,6],[18,25]],'#4e4a52','#26242a',1.5);polygon(c,[[-8,7],[0,-21],[9,7],[4,20],[-4,20]],'#7f5ca6','#d9bdff66',1);c.strokeStyle='#9b78c955';c.lineWidth=1;c.beginPath();c.arc(0,8,24,Math.PI,0);c.stroke();}else{for(const sx of [-1,1]){polygon(c,[[sx*43,23],[sx*38,6],[sx*31,23]],'#5a4a39');c.fillStyle='#d58a45';c.beginPath();c.moveTo(sx*38,4);c.lineTo(sx*34,-6);c.lineTo(sx*42,-2);c.closePath();c.fill();}}c.restore();}
- portals(c,time){this.portalEnergy(c,PATH[0].x,PATH[0].y,'#50e6bd',time,1);this.portalEnergy(c,PATH.at(-1).x,PATH.at(-1).y,'#b478ff',time,-1,this.game.nexusPulse||0);}
- portalEnergy(c,x,y,color,time,dir=1,pulse=0){c.save();c.translate(x,y);const wob=.5+.5*Math.sin(time*2.4);glow(c,color,20+12*wob+24*pulse);const g=c.createRadialGradient(0,-8,3,0,-8,35);g.addColorStop(0,colorWithAlpha('#ffffff',.35+.2*pulse));g.addColorStop(.38,colorWithAlpha(color,.42+.18*wob));g.addColorStop(1,'#0000');ellipse(c,0,-7,30,40,g);c.strokeStyle=colorWithAlpha(color,.75);c.lineWidth=2.2;for(let i=0;i<3;i++){c.beginPath();c.ellipse(0,-7,24+i*3,34-i*3,time*dir*.25+i*.55,0,Math.PI*2);c.stroke();}for(let i=0;i<8;i++){const a=time*(.55+i*.03)*dir+i*.8,r=28+Math.sin(time*2+i)*4;ellipse(c,Math.cos(a)*r,-7+Math.sin(a)*r*.72,1.5+(i%3),1.5+(i%3),colorWithAlpha(color,.7));}noGlow(c);c.restore();}
- padsDynamic(c,time,buildChoice,hoverPad,towers){if(!buildChoice)return;for(const pad of BUILD_PADS){const occupied=towers.some(t=>t.pad.id===pad.id),hover=hoverPad?.id===pad.id;const color=occupied?'#d76b65':'#65e3b5';c.save();c.translate(pad.x,pad.y);c.globalAlpha=occupied?.38:.65;glow(c,color,hover?20:10);ellipse(c,0,-1,25+(hover?2:0),14+(hover?1:0),colorWithAlpha(color,hover?.17:.09),colorWithAlpha(color,.7),1.5);c.rotate(time*.25);c.strokeStyle=colorWithAlpha(color,.58);c.lineWidth=1;for(let i=0;i<8;i++){const a=i*Math.PI/4;c.beginPath();c.moveTo(Math.cos(a)*19,Math.sin(a)*10);c.lineTo(Math.cos(a)*24,Math.sin(a)*13);c.stroke();}c.restore();}}
- ambient(c,time){c.save();for(let i=0;i<18;i++){const x=(hash(i*8.3)*WORLD.width+time*(3+i%3))%WORLD.width,y=80+hash(i*5.1)*720+Math.sin(time*.7+i)*12,alpha=.12+.14*(.5+.5*Math.sin(time*1.5+i));const col=i%5===0?'#af8dff':'#dbe890';glow(c,col,7);ellipse(c,x,y,1.2+(i%3)*.35,1.2+(i%3)*.35,colorWithAlpha(col,alpha));}noGlow(c);c.restore();}
- vignette(c){const g=c.createRadialGradient(WORLD.width*.5,WORLD.height*.48,220,WORLD.width*.5,WORLD.height*.48,940);g.addColorStop(.52,'#0000');g.addColorStop(1,'#07110d77');c.fillStyle=g;c.fillRect(0,0,WORLD.width,WORLD.height);}
+const TERRAIN_W = 18.8;
+const TERRAIN_D = 11.2;
+
+export class EnvironmentRenderer {
+  constructor(game, scene) {
+    this.game = game;
+    this.scene = scene;
+    this.group = new THREE.Group();
+    this.group.name = 'environment-3d';
+    this.padViews = new Map();
+    this.animated = [];
+    scene.add(this.group);
+    this.build();
+  }
+
+  build() {
+    this.buildTerrain();
+    this.buildRoad();
+    this.buildPads();
+    this.buildDecor();
+    this.buildPortal(PATH[0], 'entry');
+    this.buildPortal(PATH.at(-1), 'nexus');
+  }
+
+  buildTerrain() {
+    const geometry = new THREE.PlaneGeometry(TERRAIN_W, TERRAIN_D, 42, 26);
+    geometry.rotateX(-Math.PI / 2);
+    const position = geometry.attributes.position;
+    const colors = [];
+    const rand = seeded(70421);
+    const low = new THREE.Color('#244638');
+    const high = new THREE.Color('#42664a');
+    for (let i = 0; i < position.count; i++) {
+      const x = position.getX(i);
+      const z = position.getZ(i);
+      const ripple = Math.sin(x * 1.13) * 0.022 + Math.cos(z * 1.47) * 0.018 + (rand() - 0.5) * 0.025;
+      position.setY(i, ripple - 0.04);
+      const mix = THREE.MathUtils.clamp(0.28 + rand() * 0.42 + ripple * 3, 0, 1);
+      const c = low.clone().lerp(high, mix);
+      colors.push(c.r, c.g, c.b);
+    }
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.computeVertexNormals();
+    const terrain = new THREE.Mesh(geometry, material('#ffffff', { vertexColors: true, roughness: 1 }));
+    terrain.receiveShadow = true;
+    terrain.name = 'terrain';
+    this.group.add(terrain);
+
+    const under = box(TERRAIN_W + 0.25, 0.42, TERRAIN_D + 0.25, '#17251f', { roughness: 1 });
+    under.position.y = -0.28;
+    under.castShadow = false;
+    this.group.add(under);
+
+    const randTuft = seeded(5119);
+    const grassMaterial = material('#496f4e', { roughness: 1 });
+    const tuftGeometry = new THREE.ConeGeometry(0.035, 0.18, 3);
+    const grass = new THREE.InstancedMesh(tuftGeometry, grassMaterial, 240);
+    grass.castShadow = false;
+    grass.receiveShadow = false;
+    const temp = new THREE.Object3D();
+    for (let i = 0; i < 240; i++) {
+      temp.position.set((randTuft() - 0.5) * 17.3, 0.08, (randTuft() - 0.5) * 9.8);
+      temp.rotation.y = randTuft() * Math.PI;
+      const scale = 0.7 + randTuft() * 0.8;
+      temp.scale.set(scale, scale, scale);
+      temp.updateMatrix();
+      grass.setMatrixAt(i, temp.matrix);
+    }
+    grass.instanceMatrix.needsUpdate = true;
+    this.group.add(grass);
+  }
+
+  buildRoad() {
+    const road = new THREE.Group();
+    road.name = 'road';
+    const rand = seeded(8192);
+    const roadMat = material('#6e6248', { roughness: 0.98 });
+    const borderMat = material('#3d493a', { roughness: 1 });
+    const tileMats = [
+      material('#8c7f62', { roughness: 1 }),
+      material('#776d56', { roughness: 1 }),
+      material('#9b8c6c', { roughness: 1 }),
+    ];
+
+    for (let i = 1; i < PATH.length; i++) {
+      const a = toScene(PATH[i - 1].x, PATH[i - 1].y);
+      const b = toScene(PATH[i].x, PATH[i].y);
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const length = Math.hypot(dx, dz);
+      const yaw = Math.atan2(dz, dx);
+      const center = a.clone().lerp(b, 0.5);
+
+      const border = new THREE.Mesh(new THREE.BoxGeometry(length + 0.28, 0.055, 1.04), borderMat);
+      border.position.set(center.x, 0.035, center.z);
+      border.rotation.y = -yaw;
+      border.receiveShadow = true;
+      road.add(border);
+
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(length + 0.12, 0.07, 0.84), roadMat);
+      strip.position.set(center.x, 0.075, center.z);
+      strip.rotation.y = -yaw;
+      strip.receiveShadow = true;
+      road.add(strip);
+
+      const tileCount = Math.max(2, Math.floor(length / 0.26));
+      for (let j = 0; j < tileCount; j++) {
+        const t = (j + 0.5) / tileCount;
+        const lateral = (rand() - 0.5) * 0.48;
+        const px = THREE.MathUtils.lerp(a.x, b.x, t) - Math.sin(yaw) * lateral;
+        const pz = THREE.MathUtils.lerp(a.z, b.z, t) + Math.cos(yaw) * lateral;
+        const tile = new THREE.Mesh(
+          new THREE.BoxGeometry(0.11 + rand() * 0.1, 0.025 + rand() * 0.018, 0.14 + rand() * 0.12),
+          tileMats[j % tileMats.length],
+        );
+        tile.position.set(px, 0.12, pz);
+        tile.rotation.y = -yaw + (rand() - 0.5) * 0.36;
+        tile.receiveShadow = true;
+        road.add(tile);
+      }
+    }
+    this.group.add(road);
+  }
+
+  buildPads() {
+    const stone = material('#55645d', { roughness: 0.88 });
+    const inset = material('#273a32', { roughness: 0.78, metalness: 0.12 });
+    for (const pad of BUILD_PADS) {
+      const root = new THREE.Group();
+      const p = toScene(pad.x, pad.y, 0.1);
+      root.position.copy(p);
+      root.name = `pad-${pad.id}`;
+      root.userData.pad = pad;
+
+      const slab = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.45, 0.13, 6), stone);
+      slab.receiveShadow = true;
+      slab.castShadow = true;
+      root.add(slab);
+
+      const core = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.31, 0.035, 6), inset);
+      core.position.y = 0.08;
+      root.add(core);
+
+      const ring = torus(0.245, 0.014, '#79e8bf', { intensity: 0.35, opacity: 0.28 });
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.11;
+      ring.material.depthWrite = false;
+      root.add(ring);
+
+      for (let i = 0; i < 6; i++) {
+        const rune = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.014, 0.09), emissiveMaterial('#75c9a8', 0.25, 0.45));
+        const angle = (i / 6) * Math.PI * 2;
+        rune.position.set(Math.cos(angle) * 0.22, 0.115, Math.sin(angle) * 0.22);
+        rune.rotation.y = -angle;
+        root.add(rune);
+      }
+
+      this.padViews.set(pad.id, { root, ring, core });
+      this.group.add(root);
+    }
+  }
+
+  buildDecor() {
+    for (const item of DECOR) {
+      const root = this[item.type]?.(item) ?? this.rock(item);
+      const p = toScene(item.x, item.y, 0.07);
+      root.position.copy(p);
+      root.scale.setScalar(item.scale ?? 1);
+      root.rotation.y = item.variant * 0.78;
+      setShadow(root, true, true);
+      this.group.add(root);
+    }
+  }
+
+  tree(item) {
+    const root = new THREE.Group();
+    const trunk = cylinder(0.08, 0.11, 0.72, '#4b3528', 7, { roughness: 1 });
+    trunk.position.y = 0.36;
+    root.add(trunk);
+    const palette = ['#335b3c', '#416f45', '#294b35'];
+    for (let i = 0; i < 3; i++) {
+      const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38 - i * 0.035, 1), material(palette[(item.variant + i) % palette.length], { roughness: 1 }));
+      crown.position.set((i - 1) * 0.14, 0.74 + i * 0.19, (i % 2 ? 1 : -1) * 0.06);
+      crown.scale.y = 1.2;
+      root.add(crown);
+    }
+    return root;
+  }
+
+  bush(item) {
+    const root = new THREE.Group();
+    const palette = ['#3b663d', '#4c7848', '#2e5536'];
+    for (let i = 0; i < 4; i++) {
+      const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22 + (i % 2) * 0.045, 0), material(palette[(item.variant + i) % palette.length], { roughness: 1 }));
+      crown.position.set((i - 1.5) * 0.14, 0.2 + (i % 2) * 0.09, Math.sin(i * 2) * 0.09);
+      root.add(crown);
+    }
+    return root;
+  }
+
+  rock(item) {
+    const root = new THREE.Group();
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.34, 0), material(item.variant % 2 ? '#59645f' : '#4a5650', { roughness: 1 }));
+    rock.position.y = 0.24;
+    rock.scale.set(1.15, 0.72, 0.9);
+    root.add(rock);
+    return root;
+  }
+
+  crystal(item) {
+    const root = new THREE.Group();
+    const colors = ['#ad78ff', '#71dcff', '#d0a0ff'];
+    for (let i = 0; i < 4; i++) {
+      const shard = crystal(0.11 + i * 0.012, 0.55 + i * 0.12, colors[(item.variant + i) % colors.length], { intensity: 0.7 });
+      shard.position.set((i - 1.5) * 0.13, 0.28 + i * 0.05, (i % 2 ? 1 : -1) * 0.08);
+      shard.rotation.z = (i - 1.5) * 0.08;
+      root.add(shard);
+    }
+    return root;
+  }
+
+  ruin(item) {
+    const root = new THREE.Group();
+    const stone = '#5e665f';
+    for (const side of [-1, 1]) {
+      const column = cylinder(0.095, 0.12, 0.7 - (side > 0 ? 0.18 : 0), stone, 6, { roughness: 1 });
+      column.position.set(side * 0.22, 0.35 - (side > 0 ? 0.09 : 0), 0);
+      root.add(column);
+    }
+    const cap = box(0.58, 0.11, 0.18, '#6d746d', { roughness: 1 });
+    cap.position.set(-0.03, 0.73, 0);
+    cap.rotation.z = item.variant % 2 ? 0.12 : -0.08;
+    root.add(cap);
+    return root;
+  }
+
+  buildPortal(point, kind) {
+    const root = new THREE.Group();
+    const p = toScene(point.x, point.y, 0.08);
+    root.position.copy(p);
+    root.name = `${kind}-portal`;
+    const isNexus = kind === 'nexus';
+    const glowColor = isNexus ? '#bd78ff' : '#63efb1';
+    const stoneColor = isNexus ? '#42364d' : '#34463d';
+
+    const plinth = cylinder(0.56, 0.7, 0.18, stoneColor, 8, { roughness: 0.9 });
+    plinth.position.y = 0.08;
+    root.add(plinth);
+
+    if (isNexus) {
+      const core = crystal(0.22, 1.15, glowColor, { intensity: 1.2 });
+      core.position.y = 0.72;
+      core.name = 'portal-core';
+      root.add(core);
+      for (let i = 0; i < 3; i++) {
+        const ring = torus(0.42 + i * 0.12, 0.025, glowColor, { intensity: 1.2, opacity: 0.78 });
+        ring.position.y = 0.72;
+        ring.rotation.set(Math.PI / 2, i * 0.65, i * 0.85);
+        ring.name = 'portal-ring';
+        root.add(ring);
+        this.animated.push({ type: 'nexus-ring', object: ring, speed: 0.35 + i * 0.18, phase: i });
+      }
+    } else {
+      const ring = torus(0.48, 0.075, glowColor, { intensity: 1.25, opacity: 0.86 });
+      ring.position.y = 0.58;
+      ring.name = 'portal-ring';
+      root.add(ring);
+      const inner = new THREE.Mesh(new THREE.CircleGeometry(0.4, 32), emissiveMaterial(glowColor, 0.8, 0.24));
+      inner.position.y = 0.58;
+      inner.position.z = 0.005;
+      inner.material.side = THREE.DoubleSide;
+      inner.name = 'portal-core';
+      root.add(inner);
+      this.animated.push({ type: 'entry-ring', object: ring, speed: 0.55, phase: 0 });
+    }
+
+    setShadow(root, true, true);
+    this.group.add(root);
+    this.animated.push({ type: kind, object: root, speed: 1, phase: isNexus ? 1.4 : 0.2 });
+  }
+
+  update(time, buildChoice, hoverPad, towers) {
+    const occupied = new Set(towers.map((tower) => tower.pad.id));
+    for (const [id, view] of this.padViews) {
+      const isHover = hoverPad?.id === id;
+      const isOccupied = occupied.has(id);
+      const active = Boolean(buildChoice) && !isOccupied;
+      view.ring.material.opacity = isHover ? 0.9 : active ? 0.48 : 0.18;
+      view.ring.material.emissiveIntensity = isHover ? 1.8 : active ? 0.85 : 0.25;
+      view.ring.scale.setScalar(isHover ? 1.1 + Math.sin(time * 5) * 0.04 : 1);
+      view.core.material.color.set(isOccupied ? '#27312d' : active ? '#315244' : '#273a32');
+    }
+
+    for (const item of this.animated) {
+      if (item.type === 'nexus-ring') {
+        item.object.rotation.y = time * item.speed + item.phase;
+        item.object.rotation.z = time * item.speed * 0.72 + item.phase;
+      } else if (item.type === 'entry-ring') {
+        item.object.rotation.z = Math.sin(time * item.speed) * 0.08;
+      } else {
+        const core = item.object.getObjectByName('portal-core');
+        if (core) {
+          const pulse = 1 + Math.sin(time * 2.2 + item.phase) * 0.06 + (item.type === 'nexus' ? this.game.nexusPulse * 0.2 : 0);
+          core.scale.setScalar(pulse);
+        }
+      }
+    }
+  }
 }

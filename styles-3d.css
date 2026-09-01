@@ -1,0 +1,42 @@
+/* Three.js-specific presentation layer. Kept separate from the legacy HUD stylesheet. */
+.engine-badge {
+  position: absolute;
+  z-index: 5;
+  left: 20px;
+  top: 88px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid #b8ffe31a;
+  border-radius: 999px;
+  background: #07100dbd;
+  color: #98b7aa;
+  backdrop-filter: blur(8px);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .16em;
+  pointer-events: none;
+}
+
+.engine-badge i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6de3b7;
+  box-shadow: 0 0 12px #6de3b7;
+}
+
+.viewport-wrap canvas {
+  touch-action: none;
+}
+
+.side-panel {
+  background: linear-gradient(180deg, #0d1715ed, #091210e8);
+  border-color: #d9fff00c;
+}
+
+.selection-panel {
+  scrollbar-color: #ffffff18 transparent;
+  scrollbar-width: thin;
+}

@@ -1,11 +1,213 @@
+import * as THREE from 'three';
 import { ELEMENTS } from '../config/elements.js';
-import { ellipse,polygon,glow,noGlow,colorWithAlpha } from './drawing.js';
+import { toScene, emissiveMaterial, disposeObject } from './drawing.js';
 
-export class VfxRenderer{
- constructor(game){this.game=game;}
- projectiles(c,time){for(const p of this.game.projectiles){const el=ELEMENTS[p.element];c.save();c.translate(p.x,p.y);const dx=p.x-p.prevX,dy=p.y-p.prevY,angle=Math.atan2(dy,dx);c.rotate(angle);const trail=c.createLinearGradient(-24,0,8,0);trail.addColorStop(0,'#0000');trail.addColorStop(1,colorWithAlpha(el.color,.55));c.strokeStyle=trail;c.lineWidth=p.kind==='meteor'?7:p.kind==='rock'?4:3;c.beginPath();c.moveTo(-28,0);c.lineTo(0,0);c.stroke();glow(c,el.color,p.kind==='meteor'?20:11);if(p.kind==='shard'||p.kind==='prism'){c.rotate(p.spin);polygon(c,[[0,-9],[4,0],[0,9],[-4,0]],el.light,'#fff',1);}else if(p.kind==='rock'){polygon(c,[[-7,-5],[2,-8],[8,-1],[4,7],[-5,6]],'#8a7258','#342d27',1.5);c.strokeStyle=el.color;c.lineWidth=1;c.beginPath();c.moveTo(-4,-1);c.lineTo(4,2);c.stroke();}else if(p.kind==='meteor'){ellipse(c,0,0,9,8,'#3b2018');ellipse(c,1,-1,6,5,'#ff6b2f');ellipse(c,2,-2,2.5,2.5,'#ffd279');}else if(p.kind==='thorn'||p.kind==='seed'){polygon(c,[[-7,0],[3,-4],[9,0],[3,4]],p.kind==='seed'?'#b3e681':'#79b653');}else if(p.kind==='arc'){ellipse(c,0,0,6,6,el.light);c.strokeStyle=el.color;c.beginPath();c.arc(0,0,10,-1,1);c.stroke();}else ellipse(c,0,0,5,5,el.light);noGlow(c);c.restore();}}
- particles(c){for(const p of this.game.particles.items){const life=Math.max(0,p.life/p.max);c.save();c.globalAlpha=life;c.translate(p.x,p.y);c.rotate(p.rot||0);if(p.glow){glow(c,p.color,p.glow);}if(p.type==='smoke'){ellipse(c,0,0,p.r*1.4,p.r,p.color);}else if(p.type==='shard'){polygon(c,[[0,-p.r*1.7],[p.r*.65,p.r],[0,p.r*.55],[-p.r*.65,p.r]],p.color);}else if(p.type==='leaf'){ellipse(c,0,0,p.r*1.5,p.r*.55,p.color);}else if(p.type==='spark'){c.strokeStyle=p.color;c.lineWidth=Math.max(1,p.r*.6);c.beginPath();c.moveTo(-p.r,0);c.lineTo(p.r,0);c.stroke();}else if(p.type==='dust'){ellipse(c,0,0,p.r*1.2,p.r*.7,p.color);}else ellipse(c,0,0,p.r,p.r,p.color);noGlow(c);c.restore();}
-  for(const r of this.game.particles.rings){const life=Math.max(0,r.life/r.max),radius=r.from+(r.to-r.from)*(1-life);c.save();c.globalAlpha=life*.8;c.strokeStyle=r.color;c.lineWidth=r.width*life+1;c.beginPath();c.ellipse(r.x,r.y,radius,radius*(r.aspect||1),0,0,Math.PI*2);c.stroke();c.restore();}
-  for(const b of this.game.particles.beams){c.save();c.globalAlpha=Math.max(0,b.life/b.max);glow(c,b.color,12);c.strokeStyle=b.color;c.lineWidth=b.width||2.5;c.lineJoin='round';c.beginPath();b.points.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.stroke();c.globalAlpha*=.5;c.strokeStyle='#ffffff';c.lineWidth=.8;c.stroke();noGlow(c);c.restore();}
-  c.textAlign='center';c.textBaseline='middle';for(const t of this.game.particles.texts){const life=Math.max(0,t.life/t.max),ease=1-life;c.save();c.globalAlpha=Math.min(1,life*2);c.translate(t.x,t.y-ease*24);c.font=`${t.critical?'800':'700'} ${t.size||12}px ui-sans-serif,system-ui`;c.lineWidth=3;c.strokeStyle='#07100dcc';c.strokeText(t.text,0,0);c.fillStyle=t.color;c.fillText(t.text,0,0);c.restore();}}
- }
+export class VfxRenderer {
+  constructor(game, scene, camera) {
+    this.game = game;
+    this.scene = scene;
+    this.camera = camera;
+    this.group = new THREE.Group();
+    this.group.name = 'vfx-3d';
+    scene.add(this.group);
+    this.projectiles = new Map();
+    this.rings = new Map();
+    this.beams = new Map();
+    this.texts = new Map();
+    this.buildParticleCloud();
+  }
+
+  buildParticleCloud() {
+    const count = this.game.particles.maxParticles;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    const material = new THREE.PointsMaterial({
+      size: 0.075,
+      sizeAttenuation: true,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.particleCloud = new THREE.Points(geometry, material);
+    this.particleCloud.frustumCulled = false;
+    this.group.add(this.particleCloud);
+  }
+
+  sync(time) {
+    this.syncProjectiles(time);
+    this.syncParticles();
+    this.syncRings();
+    this.syncBeams();
+    this.syncTexts();
+  }
+
+  syncProjectiles(time) {
+    const live = new Set(this.game.projectiles);
+    for (const [projectile, view] of this.projectiles) {
+      if (live.has(projectile)) continue;
+      this.group.remove(view);
+      disposeObject(view);
+      this.projectiles.delete(projectile);
+    }
+    for (const projectile of this.game.projectiles) {
+      let view = this.projectiles.get(projectile);
+      if (!view) {
+        view = this.createProjectile(projectile);
+        this.group.add(view);
+        this.projectiles.set(projectile, view);
+      }
+      const height = projectile.kind === 'meteor' ? 0.92 : projectile.kind === 'rock' ? 0.48 : 0.62;
+      const current = toScene(projectile.x, projectile.y, height);
+      const previous = toScene(projectile.prevX, projectile.prevY, height * 0.96);
+      view.position.copy(current);
+      view.rotation.y = projectile.spin;
+      view.rotation.z = projectile.spin * 0.7;
+      const trail = view.getObjectByName('trail');
+      const localPrev = previous.sub(current);
+      trail.geometry.setFromPoints([new THREE.Vector3(), localPrev]);
+      trail.geometry.attributes.position.needsUpdate = true;
+      const core = view.getObjectByName('projectile-core');
+      if (core) core.scale.setScalar(1 + Math.sin(time * 12 + projectile.spin) * 0.08);
+    }
+  }
+
+  createProjectile(projectile) {
+    const root = new THREE.Group();
+    const el = ELEMENTS[projectile.element];
+    let geometry;
+    if (projectile.kind === 'shard' || projectile.kind === 'prism') geometry = new THREE.OctahedronGeometry(projectile.kind === 'prism' ? 0.13 : 0.1);
+    else if (projectile.kind === 'rock') geometry = new THREE.DodecahedronGeometry(0.13, 0);
+    else if (projectile.kind === 'meteor') geometry = new THREE.IcosahedronGeometry(0.18, 1);
+    else if (projectile.kind === 'thorn' || projectile.kind === 'seed') geometry = new THREE.ConeGeometry(0.075, 0.26, 5);
+    else geometry = new THREE.IcosahedronGeometry(0.1, 1);
+    const core = new THREE.Mesh(geometry, emissiveMaterial(el.color, projectile.kind === 'meteor' ? 2.2 : 1.65));
+    core.name = 'projectile-core';
+    root.add(core);
+    const trail = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -0.2)]),
+      new THREE.LineBasicMaterial({ color: el.light, transparent: true, opacity: 0.62, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    trail.name = 'trail';
+    root.add(trail);
+    return root;
+  }
+
+  syncParticles() {
+    const items = this.game.particles.items;
+    const positions = this.particleCloud.geometry.attributes.position;
+    const colors = this.particleCloud.geometry.attributes.color;
+    const temp = new THREE.Color();
+    const count = Math.min(items.length, positions.count);
+    for (let i = 0; i < count; i++) {
+      const p = items[i];
+      const progress = 1 - p.life / Math.max(0.001, p.max);
+      const lift = p.type === 'smoke' ? 0.28 + progress * 0.55 : Math.sin(progress * Math.PI) * 0.32 + 0.16;
+      const v = toScene(p.x, p.y, lift);
+      positions.setXYZ(i, v.x, v.y, v.z);
+      temp.set(p.color || '#ffffff');
+      const fade = THREE.MathUtils.clamp(p.life / Math.max(0.001, p.max), 0, 1);
+      colors.setXYZ(i, temp.r * fade, temp.g * fade, temp.b * fade);
+    }
+    for (let i = count; i < positions.count; i++) positions.setXYZ(i, 999, -999, 999);
+    positions.needsUpdate = true;
+    colors.needsUpdate = true;
+    this.particleCloud.geometry.setDrawRange(0, count);
+  }
+
+  syncRings() {
+    const live = new Set(this.game.particles.rings);
+    for (const [ring, view] of this.rings) {
+      if (live.has(ring)) continue;
+      this.group.remove(view);
+      disposeObject(view);
+      this.rings.delete(ring);
+    }
+    for (const ring of this.game.particles.rings) {
+      let view = this.rings.get(ring);
+      if (!view) {
+        view = new THREE.Mesh(
+          new THREE.RingGeometry(0.97, 1.03, 48),
+          new THREE.MeshBasicMaterial({ color: ring.color, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+        );
+        view.rotation.x = -Math.PI / 2;
+        this.group.add(view);
+        this.rings.set(ring, view);
+      }
+      const progress = 1 - ring.life / ring.max;
+      const radius = THREE.MathUtils.lerp(ring.from, ring.to, progress) * 0.01;
+      view.position.copy(toScene(ring.x, ring.y, 0.14));
+      view.scale.set(radius, radius * (ring.aspect || 1), radius);
+      view.material.opacity = Math.max(0, ring.life / ring.max) * 0.72;
+    }
+  }
+
+  syncBeams() {
+    const live = new Set(this.game.particles.beams);
+    for (const [beam, view] of this.beams) {
+      if (live.has(beam)) continue;
+      this.group.remove(view);
+      disposeObject(view);
+      this.beams.delete(beam);
+    }
+    for (const beam of this.game.particles.beams) {
+      let view = this.beams.get(beam);
+      if (!view) {
+        view = new THREE.Line(
+          new THREE.BufferGeometry(),
+          new THREE.LineBasicMaterial({ color: beam.color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }),
+        );
+        this.group.add(view);
+        this.beams.set(beam, view);
+      }
+      view.geometry.setFromPoints(beam.points.map((point, index) => toScene(point.x, point.y, index === 0 ? 0.72 : 0.5)));
+      view.material.opacity = Math.max(0, beam.life / beam.max);
+    }
+  }
+
+  syncTexts() {
+    const live = new Set(this.game.particles.texts);
+    for (const [text, view] of this.texts) {
+      if (live.has(text)) continue;
+      this.group.remove(view);
+      view.material.map?.dispose();
+      view.material.dispose();
+      this.texts.delete(text);
+    }
+    for (const text of this.game.particles.texts) {
+      let view = this.texts.get(text);
+      if (!view) {
+        view = this.makeTextSprite(text.text, text.color, text.critical);
+        this.group.add(view);
+        this.texts.set(text, view);
+      }
+      const progress = 1 - text.life / text.max;
+      view.position.copy(toScene(text.x, text.y, 0.62 + progress * 0.45));
+      view.material.opacity = Math.min(1, text.life / 0.18);
+      const scale = text.critical ? 0.72 : 0.56;
+      view.scale.set(scale * 1.8, scale, 1);
+    }
+  }
+
+  makeTextSprite(value, color, critical) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = `${critical ? 800 : 700} ${critical ? 66 : 54}px Inter, system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 12;
+    ctx.strokeStyle = 'rgba(9, 14, 12, .88)';
+    ctx.strokeText(value, 128, 66);
+    ctx.fillStyle = color;
+    ctx.fillText(value, 128, 66);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+    return new THREE.Sprite(material);
+  }
+}

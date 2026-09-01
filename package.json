@@ -1,12 +1,12 @@
 {
   "name": "towerdefnapst",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Tower Defense fantasy élémentaire — rendu Canvas 2.5D procédural.",
+  "description": "Tower Defense fantasy élémentaire en Three.js/WebGL.",
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
-    "check": "node --check scripts/dev-server.mjs && node scripts/check-modules.mjs && node tests/core-smoke.mjs && node tests/render-smoke.mjs"
+    "check": "node scripts/check-modules.mjs && node tests/core-smoke.mjs && node tests/render3d-smoke.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -25,5 +25,6 @@ jobs:
             fi
             sleep 1
           done
-          grep -q "ARCANE BASTION" /tmp/index.html
+          grep -q "THREE.JS EDITION" /tmp/index.html
           curl --fail --silent http://127.0.0.1:4425/src/main.js | grep -q "new Game"
+          curl --fail --silent http://127.0.0.1:4425/src/render/Renderer.js | grep -q "new THREE.WebGLRenderer"

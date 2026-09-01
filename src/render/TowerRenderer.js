@@ -1,24 +1,387 @@
+import * as THREE from 'three';
 import { ELEMENTS } from '../config/elements.js';
-import { ellipse,polygon,glow,noGlow,colorWithAlpha } from './drawing.js';
+import { TOWER_BY_ID } from '../config/towers.js';
+import {
+  SCENE_SCALE,
+  toScene,
+  material,
+  emissiveMaterial,
+  cylinder,
+  box,
+  sphere,
+  crystal,
+  torus,
+  markInteractive,
+  disposeObject,
+} from './drawing.js';
 
-export class TowerRenderer{
- constructor(game){this.game=game;}
- drawRange(c,tower,time){const el=ELEMENTS[tower.def.element],r=tower.stats.range;c.save();const g=c.createRadialGradient(tower.x,tower.y,Math.max(14,r*.18),tower.x,tower.y,r);g.addColorStop(0,colorWithAlpha(el.color,.035));g.addColorStop(.72,colorWithAlpha(el.color,.045));g.addColorStop(1,colorWithAlpha(el.color,.015));c.fillStyle=g;c.beginPath();c.arc(tower.x,tower.y,r,0,Math.PI*2);c.fill();c.strokeStyle=colorWithAlpha(el.color,.42);c.lineWidth=1.3;c.setLineDash([9,10]);c.lineDashOffset=-time*10;c.stroke();c.setLineDash([]);for(let i=0;i<16;i++){const a=i*Math.PI/8;c.beginPath();c.moveTo(tower.x+Math.cos(a)*(r-5),tower.y+Math.sin(a)*(r-5));c.lineTo(tower.x+Math.cos(a)*r,tower.y+Math.sin(a)*r);c.stroke();}c.restore();}
- draw(c,t,time,ghost=false,valid=true){const el=ELEMENTS[t.def.element],pulse=.5+.5*Math.sin(time*2+t.phase),recoil=t.recoil||0,scale=ghost?.92:1+(t.buildFx||0)*.12;c.save();c.translate(t.x,t.y);c.globalAlpha=ghost?.64:1;c.scale(scale,scale);if(ghost)c.filter=valid?'saturate(.8)':'grayscale(.65)';ellipse(c,3,14,31+t.level*2,10+t.level,'#07100db0');this.base(c,t,el,ghost,valid);c.translate(-Math.cos(t.angle||-Math.PI/2)*recoil*4,-Math.sin(t.angle||-Math.PI/2)*recoil*4);const draw=this[t.def.id.replaceAll('-','_')];if(draw)draw.call(this,c,t,el,time,pulse);else this.defaultTower(c,t,el,time,pulse);if(!ghost&&t.flash>0){c.globalAlpha=t.flash*.35;glow(c,el.light,28);ellipse(c,0,-24,22+t.level*4,22+t.level*4,colorWithAlpha(el.light,.32));noGlow(c);}if(!ghost&&t.upgradeFx>0){const rr=30+(1-t.upgradeFx)*42;c.globalAlpha=t.upgradeFx*.7;c.strokeStyle=el.light;c.lineWidth=2;c.beginPath();c.ellipse(0,1,rr,rr*.5,0,0,Math.PI*2);c.stroke();}c.restore();}
- base(c,t,el,ghost,valid){const col=ghost?(valid?'#4c6258':'#69443f'):'#3d4742';ellipse(c,0,8,28+t.level*1.5,15+t.level*.5,col,'#1d2723',2);ellipse(c,0,3,23+t.level,11+t.level*.3,'#59625b','#7c887e55',1);c.strokeStyle=colorWithAlpha(ghost?(valid?'#72ebbb':'#ff827a'):el.color,ghost?.55:.34);c.lineWidth=1.2;for(let i=0;i<6;i++){const a=i*Math.PI/3;c.beginPath();c.moveTo(Math.cos(a)*10,3+Math.sin(a)*5);c.lineTo(Math.cos(a)*19,3+Math.sin(a)*9);c.stroke();}}
- stoneSpire(c,height=45,w=16,dark='#252c29',mid='#46504b',light='#737e77'){polygon(c,[[-w,3],[-w*.7,-height*.58],[0,-height],[w*.65,-height*.56],[w,4]],mid,'#151b18',1.5);polygon(c,[[-w,3],[-w*.7,-height*.58],[0,-height],[0,2]],dark);polygon(c,[[0,-height],[w*.65,-height*.56],[w,4],[0,2]],light);}
- ember_spire(c,t,el,time,pulse){this.stoneSpire(c,38+t.level*6,13+t.level*2,'#1a1716','#312522','#4b3730');c.strokeStyle='#ff7a3c';c.lineWidth=1.5;glow(c,el.color,8);c.beginPath();c.moveTo(-4,-18);c.lineTo(2,-27);c.lineTo(-1,-37);c.moveTo(5,-11);c.lineTo(-2,-20);c.stroke();const flameY=-47-t.level*6+Math.sin(time*4+t.phase)*2;polygon(c,[[-7,flameY+12],[-4,flameY-4],[1,flameY-14],[7,flameY-2],[9,flameY+11]],'#ff7a34');polygon(c,[[-3,flameY+10],[-1,flameY-5],[3,flameY-9],[5,flameY+9]],'#ffd172');noGlow(c);if(t.level>=2){for(const sx of [-1,1]){glow(c,el.color,6);ellipse(c,sx*15,-22+Math.sin(time*2+sx)*2,3,3,el.color);noGlow(c);}}}
- magma_forge(c,t,el,time,pulse){ellipse(c,0,-9,22+t.level*2,18+t.level,'#2b2522','#171413',2);for(const sx of [-1,1]){polygon(c,[[sx*17,-5],[sx*28,-2],[sx*27,8],[sx*17,7]],'#4d3a30','#1c1714',1);glow(c,el.color,6);c.fillStyle='#ff7433';c.fillRect(sx*22,-1,sx*4,4);noGlow(c);}ellipse(c,0,-22,16+t.level,8,'#151311','#5a4032',2);glow(c,el.color,13);ellipse(c,0,-23,13+t.level,5,'#ff6a2e');ellipse(c,0,-24,7+t.level*.5,3,'#ffd06a');noGlow(c);if(t.level>=2){c.strokeStyle='#c6703d';c.lineWidth=4;c.beginPath();c.moveTo(-18,-14);c.lineTo(-28,-31);c.moveTo(18,-14);c.lineTo(28,-31);c.stroke();for(const x of [-28,28])ellipse(c,x,-32,5,5,'#3e3029','#17130f');}}
- frost_obelisk(c,t,el,time,pulse){this.stoneSpire(c,42+t.level*5,14,'#233a43','#3f6570','#688c95');const h=55+t.level*7;glow(c,el.color,12);polygon(c,[[-9,-29],[0,-h],[10,-29],[4,-13],[-4,-13]],'#68e7ffbb','#d9fbff',1.2);polygon(c,[[0,-h],[10,-29],[3,-34]],'#d7fbff99');noGlow(c);c.strokeStyle='#9ef3ff77';for(let i=0;i<t.level;i++){const a=time*.35+i*2.1;ellipse(c,Math.cos(a)*18,-30+Math.sin(a)*6,2.5,2.5,'#c9fbff');}}
- cryo_prism(c,t,el,time,pulse){const rot=time*.18;this.stoneSpire(c,30+t.level*3,17,'#1d353d','#385965','#527985');c.save();c.translate(0,-42-t.level*3);c.rotate(rot);glow(c,el.color,15);polygon(c,[[0,-19],[14,0],[0,19],[-14,0]],'#7cecffaa','#e4fdff',1.5);polygon(c,[[0,-19],[14,0],[0,1]],'#e0fbff99');noGlow(c);c.restore();for(let i=0;i<3+t.level;i++){const a=rot*1.8+i*Math.PI*2/(3+t.level);polygon(c,[[Math.cos(a)*22-2,-38+Math.sin(a)*8],[Math.cos(a)*22,-46+Math.sin(a)*8],[Math.cos(a)*22+2,-38+Math.sin(a)*8]],'#8eeeff88');}}
- spark_coil(c,t,el,time,pulse){for(const sx of [-1,1]){c.fillStyle='#4b5658';c.fillRect(sx*10-4,-28,8,31);c.strokeStyle='#aab7b7';c.lineWidth=2;for(let y=-25;y<-2;y+=7){c.beginPath();c.ellipse(sx*10,y,7,3,0,0,Math.PI*2);c.stroke();}}glow(c,el.color,15);ellipse(c,0,-37,5+pulse*2,5+pulse*2,el.light);noGlow(c);if(t.level>=2){c.strokeStyle=colorWithAlpha(el.color,.75);c.lineWidth=1.5;c.beginPath();c.moveTo(-10,-24);c.quadraticCurveTo(0,-32+Math.sin(time*9)*4,10,-18);c.stroke();}}
- tempest_pylon(c,t,el,time,pulse){this.stoneSpire(c,44+t.level*4,12,'#222c37','#35475b','#5f7892');for(const sx of [-1,1]){c.strokeStyle='#9eabb7';c.lineWidth=3;c.beginPath();c.moveTo(sx*8,-24);c.lineTo(sx*21,-42);c.stroke();ellipse(c,sx*22,-43,5,5,'#526575','#b9d5e8');}glow(c,el.color,20);ellipse(c,0,-54-t.level*3,7+pulse*2,7+pulse*2,el.light);noGlow(c);c.strokeStyle=el.color;c.lineWidth=1.4;c.beginPath();c.moveTo(-22,-43);c.lineTo(-5,-52+Math.sin(time*12)*3);c.lineTo(6,-47+Math.cos(time*11)*4);c.lineTo(22,-43);c.stroke();}
- thorn_nest(c,t,el,time,pulse){for(let i=0;i<6+t.level;i++){const a=i*Math.PI*2/(6+t.level),len=25+(i%2)*7;c.save();c.rotate(a);c.strokeStyle=i%2?'#4f6b36':'#6a7b41';c.lineWidth=4;c.beginPath();c.moveTo(0,0);c.quadraticCurveTo(10,-5,len,0);c.stroke();polygon(c,[[len-5,0],[len+4,-4],[len+1,4]],'#8ebf5a');c.restore();}glow(c,el.color,9);ellipse(c,0,-12,10+pulse*2,7+pulse,'#67c456','#b9ef92');noGlow(c);for(let i=0;i<t.level+1;i++)ellipse(c,-6+i*6,-22-Math.sin(time*2+i)*3,2.2,2.2,'#b5e88d');}
- bloom_sanctum(c,t,el,time,pulse){c.strokeStyle='#526438';c.lineWidth=7;c.beginPath();c.moveTo(0,2);c.quadraticCurveTo(-7,-22,0,-40);c.stroke();for(let i=0;i<7;i++){const a=time*.12+i*Math.PI*2/7;c.save();c.translate(Math.cos(a)*13,-42+Math.sin(a)*7);c.rotate(a);ellipse(c,0,0,8+t.level,4+t.level*.3,i%2?'#5ba75b':'#79c96c','#a7dc8e55');c.restore();}glow(c,el.color,14);ellipse(c,0,-42,6+pulse*2,6+pulse*2,'#d2ff9d');noGlow(c);if(t.level>=2){c.strokeStyle='#75b65a66';c.beginPath();c.arc(0,-42,25+3*t.level,0,Math.PI*2);c.stroke();}}
- stone_bastion(c,t,el,time,pulse){polygon(c,[[-23,3],[-22,-26],[-10,-35],[11,-35],[23,-25],[22,3]],'#6b6258','#302d2a',2);polygon(c,[[-22,-26],[-10,-35],[-2,-25],[-4,0],[-22,3]],'#4c4943');polygon(c,[[-10,-35],[11,-35],[23,-25],[6,-22],[-2,-25]],'#8b7d6a');c.save();c.rotate(t.angle+Math.PI/2);c.fillStyle='#3c3935';c.fillRect(-7,-49,14,28);c.fillStyle='#796c5b';c.fillRect(-12,-54,24,10);c.restore();glow(c,el.color,5);c.strokeStyle='#c69155';c.lineWidth=1.5;c.beginPath();c.moveTo(-7,-12);c.lineTo(0,-20);c.lineTo(7,-12);c.lineTo(0,-4);c.closePath();c.stroke();noGlow(c);}
- seismic_hammer(c,t,el,time,pulse){this.stoneSpire(c,33+t.level*3,17,'#34302d','#5d554d','#827566');c.save();c.rotate(t.angle+Math.PI/2);c.strokeStyle='#4c4035';c.lineWidth=7;c.beginPath();c.moveTo(0,-16);c.lineTo(0,-52);c.stroke();polygon(c,[[-17,-60],[17,-60],[21,-47],[-21,-47]],'#766454','#302a25',2);polygon(c,[[-17,-60],[7,-67],[21,-60],[17,-60]],'#9b866b');c.restore();glow(c,el.color,7);c.strokeStyle='#d29d59';c.lineWidth=1;c.beginPath();c.arc(0,-20,8+pulse*2,0,Math.PI*2);c.stroke();noGlow(c);}
- arcane_eye(c,t,el,time,pulse){this.stoneSpire(c,33+t.level*3,12,'#201d2b','#383246','#5d5270');const y=-43-t.level*2;glow(c,el.color,17);c.save();c.translate(0,y);c.rotate(time*.3);c.strokeStyle=el.color;c.lineWidth=2;c.beginPath();c.ellipse(0,0,20,8,0,0,Math.PI*2);c.stroke();c.beginPath();c.ellipse(0,0,8,20,0,0,Math.PI*2);c.stroke();c.restore();ellipse(c,0,y,7+pulse*2,7+pulse*2,el.light);ellipse(c,1,y,2,2,'#3b174e');noGlow(c);}
- rift_weaver(c,t,el,time,pulse){for(const sx of [-1,1])this.stoneSpireOffset(c,sx*11,31+t.level*3,9,sx);const y=-43-t.level*3;glow(c,el.color,22);c.strokeStyle=colorWithAlpha(el.color,.8);c.lineWidth=2.2;c.beginPath();c.ellipse(0,y,18+t.level*2,25+t.level*2,time*.35,0,Math.PI*2);c.stroke();const rg=c.createRadialGradient(0,y,2,0,y,15);rg.addColorStop(0,'#ffffffcc');rg.addColorStop(.3,colorWithAlpha(el.color,.9));rg.addColorStop(1,'#0000');ellipse(c,0,y,15,20,rg);noGlow(c);for(let i=0;i<3+t.level;i++){const a=time*.65+i*Math.PI*2/(3+t.level);ellipse(c,Math.cos(a)*26,y+Math.sin(a)*14,2,2,el.light);}}
- stoneSpireOffset(c,x,height,w,flip){c.save();c.translate(x,0);polygon(c,[[-w,3],[-w*.6,-height*.65],[0,-height],[w*.7,-height*.55],[w,4]],flip<0?'#332e43':'#51465f','#1b1722',1);c.restore();}
- defaultTower(c,t,el,time,pulse){this.stoneSpire(c,38+t.level*4,12);glow(c,el.color,10);ellipse(c,0,-43,8+pulse*2,8+pulse*2,el.color);noGlow(c);}
+export class TowerRenderer {
+  constructor(game, scene) {
+    this.game = game;
+    this.scene = scene;
+    this.group = new THREE.Group();
+    this.group.name = 'towers-3d';
+    scene.add(this.group);
+    this.views = new Map();
+    this.range = null;
+    this.preview = null;
+    this.previewKey = '';
+  }
+
+  sync(time) {
+    const live = new Set(this.game.towers);
+    for (const [tower, view] of this.views) {
+      if (live.has(tower)) continue;
+      this.group.remove(view);
+      disposeObject(view);
+      this.views.delete(tower);
+    }
+
+    for (const tower of this.game.towers) {
+      let view = this.views.get(tower);
+      if (!view || view.userData.level !== tower.level) {
+        if (view) {
+          this.group.remove(view);
+          disposeObject(view);
+        }
+        view = this.createTower(tower.def, tower.level, false);
+        view.userData.level = tower.level;
+        markInteractive(view, 'tower', tower);
+        this.group.add(view);
+        this.views.set(tower, view);
+      }
+      this.updateTower(view, tower, time);
+    }
+
+    this.syncRange();
+    this.syncPreview(time);
+  }
+
+  createTower(def, level = 1, ghost = false, valid = true) {
+    const el = ELEMENTS[def.element];
+    const root = new THREE.Group();
+    root.name = `tower-${def.id}`;
+    root.userData.level = level;
+
+    const baseColor = ghost ? (valid ? '#45695a' : '#764c45') : '#46524d';
+    const base = cylinder(0.3 + level * 0.025, 0.37 + level * 0.025, 0.16, baseColor, 8, { roughness: 0.82, metalness: 0.08 });
+    base.position.y = 0.08;
+    root.add(base);
+    const inset = cylinder(0.245, 0.27, 0.055, '#252f2b', 8, { roughness: 0.65, metalness: 0.16 });
+    inset.position.y = 0.185;
+    root.add(inset);
+    const rune = torus(0.205, 0.016, valid ? el.color : '#ff6b61', { intensity: ghost ? 0.7 : 0.4, opacity: ghost ? 0.7 : 0.45 });
+    rune.rotation.x = Math.PI / 2;
+    rune.position.y = 0.225;
+    root.add(rune);
+
+    const head = new THREE.Group();
+    head.name = 'head';
+    head.position.y = 0.22;
+    root.add(head);
+    this[def.id.replaceAll('-', '_')]?.(head, el, level);
+
+    if (level >= 2) {
+      for (const side of [-1, 1]) {
+        const levelShard = crystal(0.04, 0.25 + level * 0.04, el.color, { intensity: 0.65 });
+        levelShard.position.set(side * 0.25, 0.16, 0.02);
+        levelShard.rotation.z = side * 0.32;
+        root.add(levelShard);
+      }
+    }
+    if (level >= 3) {
+      const crown = torus(0.31, 0.012, el.light, { intensity: 1.05, opacity: 0.75 });
+      crown.rotation.x = Math.PI / 2;
+      crown.position.y = 0.34;
+      crown.name = 'level-crown';
+      root.add(crown);
+    }
+
+    if (ghost) this.setOpacity(root, 0.62);
+    return root;
+  }
+
+  ember_spire(root, el, level) {
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.78 + level * 0.08, 5), material('#302522', { roughness: 0.72 }));
+    spire.position.y = 0.41;
+    root.add(spire);
+    const flame = crystal(0.11 + level * 0.012, 0.34, '#ff7a37', { intensity: 1.8 });
+    flame.position.y = 0.93 + level * 0.07;
+    flame.name = 'pulse-core';
+    root.add(flame);
+    const ember = sphere(0.065, '#ffd07a', 12, { emissive: '#ff7a37', emissiveIntensity: 2.2, roughness: 0.25 });
+    ember.position.y = 1.02 + level * 0.07;
+    root.add(ember);
+  }
+
+  magma_forge(root, el, level) {
+    const bowl = cylinder(0.27, 0.2, 0.34, '#342b27', 10, { roughness: 0.78, metalness: 0.12 });
+    bowl.position.y = 0.3;
+    root.add(bowl);
+    const lava = cylinder(0.21, 0.21, 0.035, '#ff7136', 16, { emissive: '#ff4d1f', emissiveIntensity: 2.2, roughness: 0.2 });
+    lava.position.y = 0.49;
+    lava.name = 'pulse-core';
+    root.add(lava);
+    for (const side of [-1, 1]) {
+      const vent = box(0.12, 0.18, 0.28, '#574238', { roughness: 0.8 });
+      vent.position.set(side * 0.31, 0.25, 0);
+      vent.rotation.z = side * 0.2;
+      root.add(vent);
+    }
+  }
+
+  frost_obelisk(root, el, level) {
+    const pillar = crystal(0.18, 0.88 + level * 0.08, '#74dcf1', { intensity: 0.75 });
+    pillar.position.y = 0.48;
+    root.add(pillar);
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.15 + level * 0.012), emissiveMaterial(el.light, 1.15, 0.88));
+    core.position.y = 0.96 + level * 0.06;
+    core.name = 'spin-core';
+    root.add(core);
+  }
+
+  cryo_prism(root, el, level) {
+    const stem = cylinder(0.09, 0.14, 0.5, '#385863', 7, { roughness: 0.72 });
+    stem.position.y = 0.29;
+    root.add(stem);
+    const prism = new THREE.Mesh(new THREE.OctahedronGeometry(0.27 + level * 0.02), emissiveMaterial('#8eefff', 1.15, 0.92));
+    prism.position.y = 0.74;
+    prism.scale.y = 1.35;
+    prism.name = 'spin-core';
+    root.add(prism);
+    const ring = torus(0.34, 0.02, '#dffcff', { intensity: 1.15, opacity: 0.72 });
+    ring.position.y = 0.74;
+    ring.rotation.x = Math.PI / 2;
+    ring.name = 'orbit-ring';
+    root.add(ring);
+  }
+
+  spark_coil(root, el, level) {
+    const mast = cylinder(0.075, 0.12, 0.72, '#35475b', 8, { roughness: 0.56, metalness: 0.45 });
+    mast.position.y = 0.38;
+    root.add(mast);
+    for (let i = 0; i < 3 + level; i++) {
+      const ring = torus(0.19 + i * 0.012, 0.022, '#6a9dcc', { emissive: false, roughness: 0.45, metalness: 0.55 });
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.3 + i * 0.13;
+      root.add(ring);
+    }
+    const orb = sphere(0.13, el.light, 16, { emissive: el.color, emissiveIntensity: 2.3, roughness: 0.2 });
+    orb.position.y = 0.88;
+    orb.name = 'pulse-core';
+    root.add(orb);
+  }
+
+  tempest_pylon(root, el, level) {
+    const hub = cylinder(0.15, 0.2, 0.42, '#2d3f55', 7, { roughness: 0.62, metalness: 0.32 });
+    hub.position.y = 0.25;
+    root.add(hub);
+    for (let i = 0; i < 3; i++) {
+      const a = i / 3 * Math.PI * 2;
+      const prong = crystal(0.07, 0.65 + level * 0.05, '#6ca9e8', { intensity: 0.55 });
+      prong.position.set(Math.cos(a) * 0.21, 0.56, Math.sin(a) * 0.21);
+      prong.rotation.z = Math.cos(a) * 0.18;
+      prong.rotation.x = Math.sin(a) * 0.18;
+      root.add(prong);
+    }
+    const orb = sphere(0.15, '#eaf8ff', 16, { emissive: el.color, emissiveIntensity: 2.4, roughness: 0.12 });
+    orb.position.y = 0.88;
+    orb.name = 'pulse-core';
+    root.add(orb);
+  }
+
+  thorn_nest(root, el, level) {
+    const heart = sphere(0.22, '#355336', 12, { roughness: 0.95 });
+    heart.position.y = 0.36;
+    root.add(heart);
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2;
+      const thorn = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.43 + level * 0.03, 5), material('#627a42', { roughness: 1 }));
+      thorn.position.set(Math.cos(a) * 0.24, 0.37, Math.sin(a) * 0.24);
+      thorn.rotation.z = Math.cos(a) * 1.05;
+      thorn.rotation.x = -Math.sin(a) * 1.05;
+      root.add(thorn);
+    }
+    const seed = sphere(0.11, el.light, 12, { emissive: el.color, emissiveIntensity: 1.1, roughness: 0.5 });
+    seed.position.y = 0.62;
+    seed.name = 'pulse-core';
+    root.add(seed);
+  }
+
+  bloom_sanctum(root, el, level) {
+    const trunk = cylinder(0.08, 0.14, 0.66, '#4f412d', 7, { roughness: 1 });
+    trunk.position.y = 0.34;
+    root.add(trunk);
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * Math.PI * 2;
+      const petal = sphere(0.15 + level * 0.008, '#5d9c54', 12, { roughness: 0.85 });
+      petal.position.set(Math.cos(a) * 0.21, 0.7 + Math.sin(a * 2) * 0.04, Math.sin(a) * 0.21);
+      petal.scale.set(1.25, 0.72, 0.85);
+      root.add(petal);
+    }
+    const bloom = sphere(0.13, '#dff9a8', 16, { emissive: el.color, emissiveIntensity: 1.25, roughness: 0.35 });
+    bloom.position.y = 0.75;
+    bloom.name = 'spin-core';
+    root.add(bloom);
+  }
+
+  stone_bastion(root, el, level) {
+    const tower = box(0.47, 0.48 + level * 0.05, 0.47, '#59615b', { roughness: 0.94 });
+    tower.position.y = 0.28;
+    root.add(tower);
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * Math.PI * 2;
+      const merlon = box(0.14, 0.18, 0.14, '#6e756d', { roughness: 0.94 });
+      merlon.position.set(Math.cos(a) * 0.19, 0.62 + level * 0.03, Math.sin(a) * 0.19);
+      root.add(merlon);
+    }
+    const core = crystal(0.08, 0.27, el.color, { intensity: 0.55 });
+    core.position.y = 0.72;
+    root.add(core);
+  }
+
+  seismic_hammer(root, el, level) {
+    const support = cylinder(0.12, 0.17, 0.62, '#4d5350', 8, { roughness: 0.85, metalness: 0.16 });
+    support.position.y = 0.34;
+    root.add(support);
+    const pivot = sphere(0.13, '#886644', 12, { roughness: 0.75, metalness: 0.22 });
+    pivot.position.y = 0.67;
+    root.add(pivot);
+    const handle = box(0.1, 0.1, 0.68, '#5c432d', { roughness: 0.95 });
+    handle.position.set(0, 0.68, 0.24);
+    handle.name = 'recoil-part';
+    root.add(handle);
+    const hammer = box(0.5 + level * 0.05, 0.24, 0.26, '#77746a', { roughness: 0.8, metalness: 0.18 });
+    hammer.position.set(0, 0.68, 0.56);
+    hammer.name = 'recoil-part';
+    root.add(hammer);
+  }
+
+  arcane_eye(root, el, level) {
+    const stem = cylinder(0.07, 0.13, 0.58, '#443551', 7, { roughness: 0.66, metalness: 0.18 });
+    stem.position.y = 0.3;
+    root.add(stem);
+    const ring = torus(0.31 + level * 0.015, 0.035, '#b47af6', { intensity: 1.25, opacity: 0.88 });
+    ring.position.y = 0.73;
+    ring.name = 'spin-core';
+    root.add(ring);
+    const eye = sphere(0.14, '#f1deff', 16, { emissive: el.color, emissiveIntensity: 2.0, roughness: 0.2 });
+    eye.position.y = 0.73;
+    eye.scale.z = 0.5;
+    eye.name = 'pulse-core';
+    root.add(eye);
+  }
+
+  rift_weaver(root, el, level) {
+    for (const side of [-1, 1]) {
+      const pillar = crystal(0.105, 0.82 + level * 0.06, '#69468a', { intensity: 0.42 });
+      pillar.position.set(side * 0.2, 0.43, 0);
+      pillar.rotation.z = side * 0.08;
+      root.add(pillar);
+    }
+    const rift = new THREE.Mesh(new THREE.OctahedronGeometry(0.22 + level * 0.015), emissiveMaterial('#d6a7ff', 1.8, 0.82));
+    rift.position.y = 0.76;
+    rift.scale.y = 1.55;
+    rift.name = 'spin-core';
+    root.add(rift);
+    const ring = torus(0.36, 0.018, el.color, { intensity: 1.4, opacity: 0.72 });
+    ring.position.y = 0.76;
+    ring.rotation.x = Math.PI / 2;
+    ring.name = 'orbit-ring';
+    root.add(ring);
+  }
+
+  updateTower(view, tower, time) {
+    view.position.copy(toScene(tower.x, tower.y, 0.14));
+    const buildScale = 1 + tower.buildFx * 0.18;
+    view.scale.setScalar(buildScale);
+    const head = view.getObjectByName('head');
+    if (head) {
+      head.rotation.y = Math.PI / 2 - tower.angle;
+      head.position.z = -tower.recoil * 0.04;
+    }
+    const spin = view.getObjectByName('spin-core');
+    if (spin) spin.rotation.y = time * 1.35 + tower.phase;
+    const orbit = view.getObjectByName('orbit-ring');
+    if (orbit) orbit.rotation.z = time * 0.9 + tower.phase;
+    const pulse = view.getObjectByName('pulse-core');
+    if (pulse) {
+      const value = 1 + Math.sin(time * 4 + tower.phase) * 0.055 + tower.flash * 0.12;
+      pulse.scale.multiplyScalar(1 / (pulse.userData.lastScale || 1));
+      pulse.scale.multiplyScalar(value);
+      pulse.userData.lastScale = value;
+    }
+    const crown = view.getObjectByName('level-crown');
+    if (crown) crown.rotation.z = time * 0.55;
+  }
+
+  syncRange() {
+    const tower = this.game.selectedTower;
+    if (!tower) {
+      if (this.range) this.range.visible = false;
+      return;
+    }
+    const r = tower.stats.range * SCENE_SCALE;
+    const key = `${tower.def.element}-${r.toFixed(3)}`;
+    if (!this.range || this.range.userData.key !== key) {
+      if (this.range) {
+        this.scene.remove(this.range);
+        disposeObject(this.range);
+      }
+      const el = ELEMENTS[tower.def.element];
+      const root = new THREE.Group();
+      const disk = new THREE.Mesh(
+        new THREE.CircleGeometry(r, 96),
+        new THREE.MeshBasicMaterial({ color: el.color, transparent: true, opacity: 0.045, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      disk.rotation.x = -Math.PI / 2;
+      root.add(disk);
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(Math.max(0.01, r - 0.018), r + 0.018, 96),
+        new THREE.MeshBasicMaterial({ color: el.light, transparent: true, opacity: 0.52, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.006;
+      root.add(ring);
+      root.userData.key = key;
+      this.scene.add(root);
+      this.range = root;
+    }
+    this.range.visible = true;
+    this.range.position.copy(toScene(tower.x, tower.y, 0.115));
+  }
+
+  syncPreview(time) {
+    const def = TOWER_BY_ID[this.game.buildChoice];
+    const point = this.game.hoverPad ?? this.game.hoverWorld;
+    if (!def || !point) {
+      if (this.preview) this.preview.visible = false;
+      return;
+    }
+    const occupied = this.game.hoverPad && this.game.towers.some((tower) => tower.pad.id === this.game.hoverPad.id);
+    const valid = Boolean(this.game.hoverPad) && !occupied;
+    const key = `${def.id}-${valid}`;
+    if (!this.preview || this.previewKey !== key) {
+      if (this.preview) {
+        this.scene.remove(this.preview);
+        disposeObject(this.preview);
+      }
+      this.preview = this.createTower(def, 1, true, valid);
+      this.previewKey = key;
+      this.scene.add(this.preview);
+    }
+    this.preview.visible = true;
+    this.preview.position.copy(toScene(point.x, point.y, 0.15));
+    this.preview.rotation.y = Math.sin(time * 1.8) * 0.04;
+  }
+
+  setOpacity(root, opacity) {
+    root.traverse((node) => {
+      if (!node.isMesh) return;
+      node.material = node.material.clone();
+      node.material.transparent = true;
+      node.material.opacity *= opacity;
+      node.material.depthWrite = false;
+    });
+  }
 }
