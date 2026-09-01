@@ -9,8 +9,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: prefix-dev/setup-pixi@v0.10.0
-        with:
-          cache: true
       - name: Static and core checks
         run: pixi run check
       - name: HTTP smoke test on port 4425
