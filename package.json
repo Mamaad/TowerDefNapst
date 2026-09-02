@@ -1,14 +1,6 @@
 {
-  "name": "towerdefnapst",
-  "version": "0.6.0",
-  "private": true,
-  "type": "module",
-  "description": "Tower Defense fantasy élémentaire Three.js — The Battlefield Update.",
-  "scripts": {
-    "dev": "node scripts/dev-server.mjs",
-    "check": "node scripts/check-modules.mjs && node tests/core-smoke.mjs && node tests/render3d-smoke.mjs && node tests/audio-smoke.mjs && node tests/battle-smoke.mjs && node tests/battlefield-gameplay-smoke.mjs && node tests/battlefield-update-smoke.mjs && node tests/campaign-smoke.mjs && node tests/final-qa-smoke.mjs"
-  },
-  "engines": {
-    "node": ">=20"
-  }
+  "name":"towerdefnapst","version":"0.7.0","private":true,"type":"module",
+  "description":"Tower Defense fantasy élémentaire Three.js — World & Strategy Update.",
+  "scripts":{"dev":"node scripts/dev-server.mjs","check":"node scripts/check-modules.mjs && node tests/core-smoke.mjs && node tests/render3d-smoke.mjs && node tests/audio-smoke.mjs && node tests/battle-smoke.mjs && node tests/battlefield-gameplay-smoke.mjs && node tests/battlefield-update-smoke.mjs && node tests/campaign-smoke.mjs && node tests/final-qa-smoke.mjs && node tests/world-systems-smoke.mjs && node tests/world-architecture-smoke.mjs && node tests/world-stress-smoke.mjs"},
+  "engines":{"node":">=20"}
 }

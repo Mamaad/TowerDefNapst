@@ -1,2 +1,8 @@
 import { Game } from './core/Game.js';
-const canvas=document.getElementById('game');const game=new Game(canvas);window.__towerDefNapst=game;
+import { WorldStrategyManager } from './systems/WorldStrategyManager.js';
+const style=document.createElement('link');style.rel='stylesheet';style.href='./styles-world.css';document.head.appendChild(style);
+const canvas=document.getElementById('game');
+const game=new Game(canvas);
+game.world=new WorldStrategyManager(game);
+const subtitle=document.querySelector('.brand small');if(subtitle)subtitle.textContent='WORLD & STRATEGY UPDATE';document.title='TowerDefNapst — World & Strategy Update';
+window.__towerDefNapst=game;
