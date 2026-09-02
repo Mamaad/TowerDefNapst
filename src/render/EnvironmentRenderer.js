@@ -45,8 +45,8 @@ export class EnvironmentRenderer {
     const position = geometry.attributes.position;
     const colors = [];
     const rand = seeded(70421);
-    const low = new THREE.Color('#244638');
-    const high = new THREE.Color('#42664a');
+    const low = new THREE.Color('#35684d');
+    const high = new THREE.Color('#6c925e');
     for (let i = 0; i < position.count; i++) {
       const x = position.getX(i);
       const z = position.getZ(i);
@@ -63,13 +63,13 @@ export class EnvironmentRenderer {
     terrain.name = 'terrain';
     this.group.add(terrain);
 
-    const under = box(TERRAIN_W + 0.25, 0.42, TERRAIN_D + 0.25, '#17251f', { roughness: 1 });
+    const under = box(TERRAIN_W + 0.25, 0.42, TERRAIN_D + 0.25, '#21382d', { roughness: 1 });
     under.position.y = -0.28;
     under.castShadow = false;
     this.group.add(under);
 
     const randTuft = seeded(5119);
-    const grassMaterial = material('#496f4e', { roughness: 1 });
+    const grassMaterial = material('#5c8958', { roughness: 1 });
     const tuftGeometry = new THREE.ConeGeometry(0.035, 0.18, 3);
     const grass = new THREE.InstancedMesh(tuftGeometry, grassMaterial, 240);
     grass.castShadow = false;
@@ -91,13 +91,14 @@ export class EnvironmentRenderer {
     const road = new THREE.Group();
     road.name = 'road';
     const rand = seeded(8192);
-    const roadMat = material('#6e6248', { roughness: 0.98 });
-    const borderMat = material('#3d493a', { roughness: 1 });
+    const roadMat = material('#a28d67', { roughness: 0.94 });
+    const borderMat = material('#53634d', { roughness: 1 });
     const tileMats = [
-      material('#8c7f62', { roughness: 1 }),
-      material('#776d56', { roughness: 1 }),
-      material('#9b8c6c', { roughness: 1 }),
+      material('#c4ad82', { roughness: 1 }),
+      material('#9e8966', { roughness: 1 }),
+      material('#b8a078', { roughness: 1 }),
     ];
+    const laneMat = emissiveMaterial('#ead9a9', 0.22, 0.72);
 
     for (let i = 1; i < PATH.length; i++) {
       const a = toScene(PATH[i - 1].x, PATH[i - 1].y);
@@ -135,13 +136,28 @@ export class EnvironmentRenderer {
         tile.receiveShadow = true;
         road.add(tile);
       }
+
+      const markerCount = Math.max(1, Math.floor(length / 0.62));
+      for (let j = 0; j < markerCount; j++) {
+        const t = (j + 0.5) / markerCount;
+        const marker = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.012, 0.055), laneMat);
+        marker.position.set(
+          THREE.MathUtils.lerp(a.x, b.x, t),
+          0.125,
+          THREE.MathUtils.lerp(a.z, b.z, t),
+        );
+        marker.rotation.y = -yaw;
+        marker.castShadow = false;
+        marker.receiveShadow = false;
+        road.add(marker);
+      }
     }
     this.group.add(road);
   }
 
   buildPads() {
-    const stone = material('#55645d', { roughness: 0.88 });
-    const inset = material('#273a32', { roughness: 0.78, metalness: 0.12 });
+    const stone = material('#78847b', { roughness: 0.84 });
+    const inset = material('#315044', { roughness: 0.72, metalness: 0.12 });
     for (const pad of BUILD_PADS) {
       const root = new THREE.Group();
       const p = toScene(pad.x, pad.y, 0.1);
@@ -158,14 +174,14 @@ export class EnvironmentRenderer {
       core.position.y = 0.08;
       root.add(core);
 
-      const ring = torus(0.245, 0.014, '#79e8bf', { intensity: 0.35, opacity: 0.28 });
+      const ring = torus(0.245, 0.014, '#8ff2c9', { intensity: 0.55, opacity: 0.42 });
       ring.rotation.x = Math.PI / 2;
       ring.position.y = 0.11;
       ring.material.depthWrite = false;
       root.add(ring);
 
       for (let i = 0; i < 6; i++) {
-        const rune = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.014, 0.09), emissiveMaterial('#75c9a8', 0.25, 0.45));
+        const rune = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.014, 0.09), emissiveMaterial('#8adfbe', 0.4, 0.55));
         const angle = (i / 6) * Math.PI * 2;
         rune.position.set(Math.cos(angle) * 0.22, 0.115, Math.sin(angle) * 0.22);
         rune.rotation.y = -angle;
@@ -194,7 +210,7 @@ export class EnvironmentRenderer {
     const trunk = cylinder(0.08, 0.11, 0.72, '#4b3528', 7, { roughness: 1 });
     trunk.position.y = 0.36;
     root.add(trunk);
-    const palette = ['#335b3c', '#416f45', '#294b35'];
+    const palette = ['#47744a', '#5a874f', '#386343'];
     for (let i = 0; i < 3; i++) {
       const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38 - i * 0.035, 1), material(palette[(item.variant + i) % palette.length], { roughness: 1 }));
       crown.position.set((i - 1) * 0.14, 0.74 + i * 0.19, (i % 2 ? 1 : -1) * 0.06);
@@ -206,7 +222,7 @@ export class EnvironmentRenderer {
 
   bush(item) {
     const root = new THREE.Group();
-    const palette = ['#3b663d', '#4c7848', '#2e5536'];
+    const palette = ['#4f7e49', '#638d50', '#3a693f'];
     for (let i = 0; i < 4; i++) {
       const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22 + (i % 2) * 0.045, 0), material(palette[(item.variant + i) % palette.length], { roughness: 1 }));
       crown.position.set((i - 1.5) * 0.14, 0.2 + (i % 2) * 0.09, Math.sin(i * 2) * 0.09);
@@ -217,7 +233,7 @@ export class EnvironmentRenderer {
 
   rock(item) {
     const root = new THREE.Group();
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.34, 0), material(item.variant % 2 ? '#59645f' : '#4a5650', { roughness: 1 }));
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.34, 0), material(item.variant % 2 ? '#718078' : '#626f68', { roughness: 1 }));
     rock.position.y = 0.24;
     rock.scale.set(1.15, 0.72, 0.9);
     root.add(rock);
@@ -238,7 +254,7 @@ export class EnvironmentRenderer {
 
   ruin(item) {
     const root = new THREE.Group();
-    const stone = '#5e665f';
+    const stone = '#737d75';
     for (const side of [-1, 1]) {
       const column = cylinder(0.095, 0.12, 0.7 - (side > 0 ? 0.18 : 0), stone, 6, { roughness: 1 });
       column.position.set(side * 0.22, 0.35 - (side > 0 ? 0.09 : 0), 0);
@@ -257,12 +273,21 @@ export class EnvironmentRenderer {
     root.position.copy(p);
     root.name = `${kind}-portal`;
     const isNexus = kind === 'nexus';
-    const glowColor = isNexus ? '#bd78ff' : '#63efb1';
-    const stoneColor = isNexus ? '#42364d' : '#34463d';
+    const glowColor = isNexus ? '#d69cff' : '#7ff3bd';
+    const stoneColor = isNexus ? '#5d4d68' : '#486052';
 
     const plinth = cylinder(0.56, 0.7, 0.18, stoneColor, 8, { roughness: 0.9 });
     plinth.position.y = 0.08;
     root.add(plinth);
+
+    const groundHalo = new THREE.Mesh(
+      new THREE.RingGeometry(0.5, 0.78, 48),
+      new THREE.MeshBasicMaterial({ color: glowColor, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    groundHalo.rotation.x = -Math.PI / 2;
+    groundHalo.position.y = 0.105;
+    groundHalo.name = 'portal-ground-halo';
+    root.add(groundHalo);
 
     if (isNexus) {
       const core = crystal(0.22, 1.15, glowColor, { intensity: 1.2 });
@@ -300,12 +325,13 @@ export class EnvironmentRenderer {
     const occupied = new Set(towers.map((tower) => tower.pad.id));
     for (const [id, view] of this.padViews) {
       const isHover = hoverPad?.id === id;
+      const isSelected = this.game.selectedPad?.id === id;
       const isOccupied = occupied.has(id);
       const active = Boolean(buildChoice) && !isOccupied;
-      view.ring.material.opacity = isHover ? 0.9 : active ? 0.48 : 0.18;
-      view.ring.material.emissiveIntensity = isHover ? 1.8 : active ? 0.85 : 0.25;
-      view.ring.scale.setScalar(isHover ? 1.1 + Math.sin(time * 5) * 0.04 : 1);
-      view.core.material.color.set(isOccupied ? '#27312d' : active ? '#315244' : '#273a32');
+      view.ring.material.opacity = isHover ? 0.95 : isSelected ? 0.78 : active ? 0.6 : 0.34;
+      view.ring.material.emissiveIntensity = isHover ? 2.1 : isSelected ? 1.45 : active ? 1.05 : 0.5;
+      view.ring.scale.setScalar(isHover || isSelected ? 1.08 + Math.sin(time * 5) * 0.035 : 1);
+      view.core.material.color.set(isOccupied ? '#35443d' : active ? '#3e6d59' : '#355246');
     }
 
     for (const item of this.animated) {
@@ -317,8 +343,13 @@ export class EnvironmentRenderer {
       } else {
         const core = item.object.getObjectByName('portal-core');
         if (core) {
-          const pulse = 1 + Math.sin(time * 2.2 + item.phase) * 0.06 + (item.type === 'nexus' ? this.game.nexusPulse * 0.2 : 0);
+          const pulse = 1 + Math.sin(time * 2.2 + item.phase) * 0.06 + (item.type === 'nexus' ? this.game.nexusPulse * 0.2 : this.game.spawnPulse * 0.08);
           core.scale.setScalar(pulse);
+        }
+        const halo = item.object.getObjectByName('portal-ground-halo');
+        if (halo) {
+          halo.material.opacity = 0.15 + Math.sin(time * 1.8 + item.phase) * 0.035 + (item.type === 'nexus' ? this.game.nexusPulse * 0.18 : this.game.spawnPulse * 0.14);
+          halo.scale.setScalar(1 + Math.sin(time * 1.35 + item.phase) * 0.035);
         }
       }
     }

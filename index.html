@@ -32,6 +32,7 @@
           </div>
           <div class="hud-actions">
             <button id="pauseBtn" class="icon-button" aria-label="Pause" title="Pause (Espace)"></button>
+            <button id="cameraBtn" class="icon-button" aria-label="Réinitialiser la caméra" title="Réinitialiser la caméra (R)"></button>
             <div class="speed-group" aria-label="Vitesse"><button data-speed="1" class="active">×1</button><button data-speed="2">×2</button><button data-speed="3">×3</button></div>
             <button id="waveBtn" class="wave-cta"><span class="cta-icon" id="playIcon"></span><span><small>PROCHAINE</small><strong>LANCER VAGUE</strong></span><em id="waveBonus">+102 OR</em></button>
           </div>
@@ -42,7 +43,8 @@
         <div id="waveBanner" class="wave-banner"><span id="waveBannerKicker">VAGUE</span><strong id="waveBannerTitle"></strong><small id="waveBannerSubtitle"></small></div>
         <div id="toast" class="toast"></div>
         <div id="debug" class="debug-panel hidden"></div>
-        <div class="help-chip"><kbd>D</kbd> debug <span></span><kbd>Espace</kbd> pause <span></span><kbd>Molette</kbd> zoom <span></span><kbd>Échap</kbd> annuler</div>
+        <div id="padHud" class="pad-hud hidden"><small id="padHudKicker">SOCLE TACTIQUE</small><strong id="padHudTitle"></strong><span id="padHudMeta"></span></div>
+        <div class="help-chip"><kbd>Drag</kbd> tourner <span></span><kbd>Shift+drag</kbd> déplacer <span></span><kbd>WASD</kbd> pan <span></span><kbd>Q/E</kbd> rotation <span></span><kbd>R</kbd> reset <span></span><kbd>Molette</kbd> zoom</div>
 
         <aside class="side-panel">
           <div class="panel-header"><div><small>DÉFENSES</small><strong>Arsenal élémentaire</strong></div><span class="panel-rune" id="panelRune"></span></div>

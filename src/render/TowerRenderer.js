@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ELEMENTS } from '../config/elements.js';
 import { TOWER_BY_ID } from '../config/towers.js';
+import { PAD_BASELINE_RANGE } from '../config/map.js';
 import {
   SCENE_SCALE,
   toScene,
@@ -317,38 +318,81 @@ export class TowerRenderer {
 
   syncRange() {
     const tower = this.game.selectedTower;
-    if (!tower) {
+    const buildDef = TOWER_BY_ID[this.game.buildChoice];
+    const pad = tower
+      ? { x: tower.x, y: tower.y }
+      : (buildDef && this.game.hoverPad) || this.game.selectedPad;
+
+    if (!pad) {
       if (this.range) this.range.visible = false;
       return;
     }
-    const r = tower.stats.range * SCENE_SCALE;
-    const key = `${tower.def.element}-${r.toFixed(3)}`;
+
+    const def = tower?.def ?? buildDef;
+    const range = tower?.stats.range ?? def?.range ?? PAD_BASELINE_RANGE;
+    const element = def?.element ?? 'arcane';
+    const occupiedByOther = !tower && this.game.selectedPad && this.game.towers.some((item) => item.pad.id === this.game.selectedPad.id);
+    const valid = !occupiedByOther;
+    const r = range * SCENE_SCALE;
+    const key = `${element}-${r.toFixed(3)}-${valid}`;
+
     if (!this.range || this.range.userData.key !== key) {
       if (this.range) {
         this.scene.remove(this.range);
         disposeObject(this.range);
       }
-      const el = ELEMENTS[tower.def.element];
+      const el = ELEMENTS[element];
+      const color = valid ? el.color : '#ff746b';
+      const light = valid ? el.light : '#ffb2ad';
       const root = new THREE.Group();
+
       const disk = new THREE.Mesh(
         new THREE.CircleGeometry(r, 96),
-        new THREE.MeshBasicMaterial({ color: el.color, transparent: true, opacity: 0.045, depthWrite: false, side: THREE.DoubleSide }),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: tower ? 0.055 : 0.07,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        }),
       );
       disk.rotation.x = -Math.PI / 2;
       root.add(disk);
+
+      const inner = new THREE.Mesh(
+        new THREE.RingGeometry(Math.max(0.01, r * 0.66 - 0.008), r * 0.66 + 0.008, 96),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      inner.rotation.x = -Math.PI / 2;
+      inner.position.y = 0.004;
+      root.add(inner);
+
       const ring = new THREE.Mesh(
-        new THREE.RingGeometry(Math.max(0.01, r - 0.018), r + 0.018, 96),
-        new THREE.MeshBasicMaterial({ color: el.light, transparent: true, opacity: 0.52, depthWrite: false, side: THREE.DoubleSide }),
+        new THREE.RingGeometry(Math.max(0.01, r - 0.018), r + 0.018, 128),
+        new THREE.MeshBasicMaterial({ color: light, transparent: true, opacity: 0.66, depthWrite: false, side: THREE.DoubleSide }),
       );
       ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.006;
+      ring.position.y = 0.008;
       root.add(ring);
+
+      for (let i = 0; i < 12; i++) {
+        const angle = i / 12 * Math.PI * 2;
+        const tick = new THREE.Mesh(
+          new THREE.BoxGeometry(0.012, 0.004, 0.075),
+          new THREE.MeshBasicMaterial({ color: light, transparent: true, opacity: 0.72, depthWrite: false }),
+        );
+        tick.position.set(Math.cos(angle) * r, 0.012, Math.sin(angle) * r);
+        tick.rotation.y = -angle;
+        root.add(tick);
+      }
+
       root.userData.key = key;
       this.scene.add(root);
       this.range = root;
     }
+
     this.range.visible = true;
-    this.range.position.copy(toScene(tower.x, tower.y, 0.115));
+    this.range.position.copy(toScene(pad.x, pad.y, 0.122));
   }
 
   syncPreview(time) {

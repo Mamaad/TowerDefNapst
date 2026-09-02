@@ -1,11 +1,157 @@
-import { Projectile } from '../entities/Projectile.js';import { elementalMultiplier,ELEMENTS } from '../config/elements.js';
-export class CombatSystem{
- constructor(game){this.game=game;}
- update(dt){for(const t of this.game.towers){t.update(dt);if(t.cooldown>0)continue;const target=this.pickTarget(t);if(!target)continue;this.fire(t,target);}}
- pickTarget(tower){const r2=tower.stats.range**2;let list=this.game.enemies.filter(e=>!e.dead&&(e.x-tower.x)**2+(e.y-tower.y)**2<=r2);if(!list.length)return null;switch(tower.targetMode){case'last':list.sort((a,b)=>a.distance-b.distance);break;case'strong':list.sort((a,b)=>b.hp-a.hp);break;case'weak':list.sort((a,b)=>a.hp-b.hp);break;case'closest':list.sort((a,b)=>((a.x-tower.x)**2+(a.y-tower.y)**2)-((b.x-tower.x)**2+(b.y-tower.y)**2));break;default:list.sort((a,b)=>b.distance-a.distance);}return list[0];}
- fire(t,target){const s=t.stats,def=t.def;let rate=s.rate;for(const ally of this.game.towers){if(ally===t||!ally.def.auraRate)continue;if((ally.x-t.x)**2+(ally.y-t.y)**2<=(ally.def.auraRadius||0)**2)rate*=1+ally.def.auraRate;}t.cooldown=1/rate;t.flash=1;t.recoil=1;t.angle=Math.atan2(target.y-t.y,target.x-t.x);this.game.audio.play('shoot');this.game.particles.muzzle(t,target);if(def.projectile==='bolt'){this.chain(t,target,s.damage);return;}this.game.projectiles.push(new Projectile({tower:t,target,damage:s.damage,element:def.element,kind:def.projectile,splash:s.splash,meta:def,speed:def.projectile==='meteor'?330:def.projectile==='rock'?390:540}));}
- chain(t,target,damage){const hit=[];let current=target,amount=damage;const max=t.def.chain||3;for(let i=0;i<max&&current;i++){hit.push(current);this.damage(t,current,amount);const next=this.game.enemies.filter(e=>!e.dead&&!hit.includes(e)&&Math.hypot(e.x-current.x,e.y-current.y)<105).sort((a,b)=>Math.hypot(a.x-current.x,a.y-current.y)-Math.hypot(b.x-current.x,b.y-current.y))[0];amount*=t.def.chainFalloff||.72;current=next;}this.game.particles.beam([{x:t.x,y:t.y-25},...hit.map(e=>({x:e.x,y:e.y-4}))],ELEMENTS.lightning.color);for(const e of hit)this.game.particles.impact('lightning',e.x,e.y,'bolt',false);}
- impact(p){const t=p.tower,target=p.target;if(!target||target.dead)return;this.damage(t,target,p.damage);if(p.splash>0){for(const e of this.game.enemies){if(e!==target&&!e.dead&&Math.hypot(e.x-target.x,e.y-target.y)<=p.splash)this.damage(t,e,p.damage*.55,true);}}this.game.particles.impact(p.element,target.x,target.y,p.kind,p.splash>45||p.kind==='meteor');this.game.audio.play('impact');}
- damage(t,e,base,isSplash=false){if(e.dead)return;const d=t.def,mult=elementalMultiplier(d.element,e,d.penetration||0);let amount=base*mult;if(d.pureFraction){const pure=base*d.pureFraction;amount=base*(1-d.pureFraction)*mult+pure;}if(e.effects.has('mark'))amount*=e.effects.get('mark').amount||1;const before=e.hp+e.shield,dealt=e.takeRawDamage(amount);t.damageDone+=dealt;if(e._damageTextCooldown<=0&&(!isSplash||this.game.enemies.length<45)){const critical=mult>1.2,color=mult>1.12?ELEMENTS[d.element].light:mult<.82?'#a6aaa8':'#f2efe4';this.game.particles.damageText(e.x,e.y-e.def.size-5,Math.max(1,Math.round(dealt)),color,critical,critical?15:11);e._damageTextCooldown=this.game.enemies.length>70?.36:.18;}if(d.burn&&!e.dead)e.addEffect('burn',{remaining:d.burnDuration||3,dps:d.burn*(.8+t.level*.2),source:t});if(d.poison&&!e.dead)e.addEffect('poison',{remaining:d.poisonDuration||4,dps:d.poison*(.8+t.level*.2),stacks:1,source:t});if(d.slow&&!e.dead)e.addEffect('slow',{remaining:d.slowDuration||2,amount:d.slow});if(d.freezeChance&&!e.dead&&Math.random()<d.freezeChance)e.addEffect('freeze',{remaining:.55+.12*t.level});if(d.stunChance&&!e.dead&&Math.random()<d.stunChance)e.addEffect('stun',{remaining:d.stunDuration||.5});if(d.mark&&!e.dead)e.addEffect('mark',{remaining:d.markDuration||3,amount:d.mark});if(d.conductive&&e.effects.has('slow')){e.takeRawDamage(base*.2);this.game.particles.impact('lightning',e.x,e.y,'bolt');}if(e.dead&&before>0)this.kill(t,e);}
- kill(t,e){if(e.escaped||e._rewarded)return;e._rewarded=true;if(t)t.kills++;this.game.state.kills++;this.game.state.reward(e.reward);this.game.state.score+=Math.round(e.maxHp);this.game.particles.death(e);if(e.def.boss)this.game.ui.banner('ARCHONTE ABATTU','Le Nexus respire à nouveau');}
+import { Projectile } from '../entities/Projectile.js';
+import { elementalMultiplier, ELEMENTS } from '../config/elements.js';
+
+export class CombatSystem {
+  constructor(game) {
+    this.game = game;
+  }
+
+  update(dt) {
+    for (const tower of this.game.towers) {
+      tower.update(dt);
+      if (tower.cooldown > 0) continue;
+      const target = this.pickTarget(tower);
+      if (target) this.fire(tower, target);
+    }
+  }
+
+  pickTarget(tower) {
+    const rangeSquared = tower.stats.range ** 2;
+    const list = this.game.enemies.filter((enemy) => !enemy.dead && (enemy.x - tower.x) ** 2 + (enemy.y - tower.y) ** 2 <= rangeSquared);
+    if (!list.length) return null;
+    switch (tower.targetMode) {
+      case 'last': list.sort((a, b) => a.distance - b.distance); break;
+      case 'strong': list.sort((a, b) => b.hp - a.hp); break;
+      case 'weak': list.sort((a, b) => a.hp - b.hp); break;
+      case 'closest': list.sort((a, b) => ((a.x - tower.x) ** 2 + (a.y - tower.y) ** 2) - ((b.x - tower.x) ** 2 + (b.y - tower.y) ** 2)); break;
+      default: list.sort((a, b) => b.distance - a.distance);
+    }
+    return list[0];
+  }
+
+  fire(tower, target) {
+    const stats = tower.stats;
+    const def = tower.def;
+    let rate = stats.rate;
+    for (const ally of this.game.towers) {
+      if (ally === tower || !ally.def.auraRate) continue;
+      if ((ally.x - tower.x) ** 2 + (ally.y - tower.y) ** 2 <= (ally.def.auraRadius || 0) ** 2) rate *= 1 + ally.def.auraRate;
+    }
+
+    tower.cooldown = 1 / rate;
+    tower.flash = 1;
+    tower.recoil = 1;
+    tower.angle = Math.atan2(target.y - tower.y, target.x - tower.x);
+    this.game.audio.playShot(tower);
+    this.game.particles.muzzle(tower, target);
+
+    if (def.projectile === 'bolt') {
+      this.chain(tower, target, stats.damage);
+      return;
+    }
+
+    const speed = def.projectile === 'arc' ? 900
+      : def.projectile === 'meteor' ? 340
+        : def.projectile === 'rock' ? 430
+          : def.projectile === 'prism' ? 610
+            : 565;
+
+    this.game.projectiles.push(new Projectile({
+      tower,
+      target,
+      damage: stats.damage,
+      element: def.element,
+      kind: def.projectile,
+      splash: stats.splash,
+      meta: def,
+      speed,
+    }));
+  }
+
+  chain(tower, target, damage) {
+    const hit = [];
+    let current = target;
+    let amount = damage;
+    const max = tower.def.chain || 3;
+    for (let i = 0; i < max && current; i++) {
+      hit.push(current);
+      this.damage(tower, current, amount);
+      const next = this.game.enemies
+        .filter((enemy) => !enemy.dead && !hit.includes(enemy) && Math.hypot(enemy.x - current.x, enemy.y - current.y) < 105)
+        .sort((a, b) => Math.hypot(a.x - current.x, a.y - current.y) - Math.hypot(b.x - current.x, b.y - current.y))[0];
+      amount *= tower.def.chainFalloff || 0.72;
+      current = next;
+    }
+    this.game.particles.beam([{ x: tower.x, y: tower.y - 25 }, ...hit.map((enemy) => ({ x: enemy.x, y: enemy.y - 4 }))], ELEMENTS.lightning.color);
+    for (const enemy of hit) this.game.particles.impact('lightning', enemy.x, enemy.y, 'bolt', false);
+    if (hit.length) this.game.audio.playImpact({ element: 'lightning', splash: 0, kind: 'bolt' }, hit[0]);
+  }
+
+  impact(projectile) {
+    const tower = projectile.tower;
+    const target = projectile.target;
+    if (!target || target.dead) return;
+    this.damage(tower, target, projectile.damage);
+    if (projectile.splash > 0) {
+      for (const enemy of this.game.enemies) {
+        if (enemy !== target && !enemy.dead && Math.hypot(enemy.x - target.x, enemy.y - target.y) <= projectile.splash) {
+          this.damage(tower, enemy, projectile.damage * 0.55, true);
+        }
+      }
+    }
+
+    const heavy = projectile.splash > 45 || projectile.kind === 'meteor';
+    this.game.particles.impact(projectile.element, target.x, target.y, projectile.kind, heavy);
+    this.game.audio.playImpact(projectile, target);
+    if (heavy) this.game.renderer.kickCamera(projectile.kind === 'meteor' ? 0.035 : 0.018);
+  }
+
+  damage(tower, enemy, base, isSplash = false) {
+    if (enemy.dead) return;
+    const def = tower.def;
+    const multiplier = elementalMultiplier(def.element, enemy, def.penetration || 0);
+    let amount = base * multiplier;
+    if (def.pureFraction) {
+      const pure = base * def.pureFraction;
+      amount = base * (1 - def.pureFraction) * multiplier + pure;
+    }
+    if (enemy.effects.has('mark')) amount *= enemy.effects.get('mark').amount || 1;
+
+    const before = enemy.hp + enemy.shield;
+    const dealt = enemy.takeRawDamage(amount);
+    tower.damageDone += dealt;
+
+    if (enemy._damageTextCooldown <= 0 && (!isSplash || this.game.enemies.length < 45)) {
+      const critical = multiplier > 1.2;
+      const color = multiplier > 1.12 ? ELEMENTS[def.element].light : multiplier < 0.82 ? '#b9bdbc' : '#f5f0df';
+      this.game.particles.damageText(enemy.x, enemy.y - enemy.def.size - 5, Math.max(1, Math.round(dealt)), color, critical, critical ? 15 : 11);
+      enemy._damageTextCooldown = this.game.enemies.length > 70 ? 0.36 : 0.2;
+    }
+
+    if (def.burn && !enemy.dead) enemy.addEffect('burn', { remaining: def.burnDuration || 3, dps: def.burn * (0.8 + tower.level * 0.2), source: tower });
+    if (def.poison && !enemy.dead) enemy.addEffect('poison', { remaining: def.poisonDuration || 4, dps: def.poison * (0.8 + tower.level * 0.2), stacks: 1, source: tower });
+    if (def.slow && !enemy.dead) enemy.addEffect('slow', { remaining: def.slowDuration || 2, amount: def.slow });
+    if (def.freezeChance && !enemy.dead && Math.random() < def.freezeChance) enemy.addEffect('freeze', { remaining: 0.55 + 0.12 * tower.level });
+    if (def.stunChance && !enemy.dead && Math.random() < def.stunChance) enemy.addEffect('stun', { remaining: def.stunDuration || 0.5 });
+    if (def.mark && !enemy.dead) enemy.addEffect('mark', { remaining: def.markDuration || 3, amount: def.mark });
+    if (def.conductive && enemy.effects.has('slow')) {
+      enemy.takeRawDamage(base * 0.2);
+      this.game.particles.impact('lightning', enemy.x, enemy.y, 'bolt');
+    }
+    if (enemy.dead && before > 0) this.kill(tower, enemy);
+  }
+
+  kill(tower, enemy) {
+    if (enemy.escaped || enemy._rewarded) return;
+    enemy._rewarded = true;
+    if (tower) tower.kills += 1;
+    this.game.state.kills += 1;
+    this.game.state.reward(enemy.reward);
+    this.game.state.score += Math.round(enemy.maxHp);
+    this.game.particles.death(enemy);
+    if (enemy.def.boss) {
+      this.game.renderer.kickCamera(0.075);
+      this.game.ui.banner('ARCHONTE ABATTU', 'Le Nexus respire à nouveau');
+    }
+  }
 }

@@ -12,18 +12,23 @@ export class Renderer {
     this.canvas = canvas;
     this.time = 0;
     this.zoom = 1;
+    this.cameraYaw = 0.72;
+    this.cameraPitch = 0.72;
+    this.cameraDistance = 18;
+    this.cameraTarget = new THREE.Vector3(-0.65, 0, 0.15);
+    this.cameraShake = 0;
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.debugRoot = null;
+    this.cameraGesture = null;
+    this.ignoreNextClick = false;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#091410');
-    this.scene.fog = new THREE.FogExp2('#102019', 0.046);
+    this.scene.background = new THREE.Color('#1b392d');
+    this.scene.fog = new THREE.FogExp2('#294b3a', 0.018);
 
-    this.camera = new THREE.OrthographicCamera(-10, 10, 6, -6, 0.1, 60);
-    this.camera.position.set(10.2, 12.8, 13.4);
-    this.camera.lookAt(-0.7, 0, 0.1);
+    this.camera = new THREE.OrthographicCamera(-10, 10, 6, -6, 0.1, 80);
 
     this.webgl = new THREE.WebGLRenderer({
       canvas,
@@ -33,7 +38,7 @@ export class Renderer {
     });
     this.webgl.outputColorSpace = THREE.SRGBColorSpace;
     this.webgl.toneMapping = THREE.ACESFilmicToneMapping;
-    this.webgl.toneMappingExposure = 1.08;
+    this.webgl.toneMappingExposure = 1.34;
     this.webgl.shadowMap.enabled = true;
     this.webgl.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -46,20 +51,17 @@ export class Renderer {
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas.parentElement ?? canvas);
     window.addEventListener('resize', () => this.resize(), { passive: true });
-    canvas.addEventListener('wheel', (event) => {
-      event.preventDefault();
-      this.zoom = THREE.MathUtils.clamp(this.zoom * (event.deltaY > 0 ? 0.94 : 1.06), 0.8, 1.28);
-      this.resize();
-    }, { passive: false });
+    this.bindCameraControls();
     this.resize();
+    this.updateCamera();
   }
 
   setupLights() {
-    const hemisphere = new THREE.HemisphereLight('#cfe8de', '#1b2b22', 1.65);
-    this.scene.add(hemisphere);
-
-    const key = new THREE.DirectionalLight('#fff0d2', 2.25);
-    key.position.set(-6, 13, 7);
+    this.lights = {};
+    const ambient = new THREE.AmbientLight('#d8ecd9', 0.56);
+    const hemisphere = new THREE.HemisphereLight('#f4f7df', '#365b42', 2.25);
+    const key = new THREE.DirectionalLight('#fff0cf', 3.05);
+    key.position.set(-6.5, 13.5, 7.5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
     key.shadow.camera.left = -11;
@@ -67,13 +69,138 @@ export class Renderer {
     key.shadow.camera.top = 8;
     key.shadow.camera.bottom = -8;
     key.shadow.camera.near = 1;
-    key.shadow.camera.far = 34;
-    key.shadow.bias = -0.0007;
-    this.scene.add(key);
+    key.shadow.camera.far = 36;
+    key.shadow.bias = -0.00055;
 
-    const rim = new THREE.DirectionalLight('#8f82ff', 0.65);
-    rim.position.set(8, 7, -9);
-    this.scene.add(rim);
+    const fill = new THREE.DirectionalLight('#a9d9ff', 1.18);
+    fill.position.set(7, 8, 4);
+    const rim = new THREE.DirectionalLight('#d5b6ff', 0.76);
+    rim.position.set(5, 6, -10);
+
+    const spawn = new THREE.PointLight('#7ff2bb', 1.25, 4.4, 2);
+    spawn.position.copy(toScene(PATH[0].x, PATH[0].y, 1.45));
+    const nexus = new THREE.PointLight('#c78cff', 1.42, 4.8, 2);
+    nexus.position.copy(toScene(PATH.at(-1).x, PATH.at(-1).y, 1.6));
+
+    this.scene.add(ambient, hemisphere, key, fill, rim, spawn, nexus);
+    Object.assign(this.lights, { ambient, hemisphere, key, fill, rim, spawn, nexus });
+  }
+
+  bindCameraControls() {
+    const start = (event) => {
+      const rotate = event.button === 2 || event.button === 1 || (event.button === 0 && event.altKey) || (event.button === 0 && !event.shiftKey && !this.game.buildChoice && !this.game.hoverPad);
+      const pan = event.button === 0 && event.shiftKey;
+      if (!rotate && !pan) return;
+      event.preventDefault();
+      this.cameraGesture = {
+        pointerId: event.pointerId,
+        mode: pan ? 'pan' : 'rotate',
+        x: event.clientX,
+        y: event.clientY,
+        moved: false,
+      };
+      this.canvas.setPointerCapture?.(event.pointerId);
+      this.canvas.classList.add('camera-dragging');
+    };
+
+    const move = (event) => {
+      const gesture = this.cameraGesture;
+      if (!gesture || gesture.pointerId !== event.pointerId) return;
+      const dx = event.clientX - gesture.x;
+      const dy = event.clientY - gesture.y;
+      gesture.x = event.clientX;
+      gesture.y = event.clientY;
+      if (Math.abs(dx) + Math.abs(dy) > 2) gesture.moved = true;
+      if (gesture.mode === 'rotate') {
+        this.cameraYaw -= dx * 0.0062;
+        this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + dy * 0.0048, 0.48, 1.18);
+        this.updateCamera();
+      } else {
+        this.panPixels(dx, dy);
+      }
+    };
+
+    const end = (event) => {
+      if (!this.cameraGesture || this.cameraGesture.pointerId !== event.pointerId) return;
+      this.ignoreNextClick ||= this.cameraGesture.moved;
+      this.canvas.releasePointerCapture?.(event.pointerId);
+      this.cameraGesture = null;
+      this.canvas.classList.remove('camera-dragging');
+    };
+
+    this.canvas.addEventListener('pointerdown', start);
+    this.canvas.addEventListener('pointermove', move);
+    this.canvas.addEventListener('pointerup', end);
+    this.canvas.addEventListener('pointercancel', end);
+    this.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+    this.canvas.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      this.zoom = THREE.MathUtils.clamp(this.zoom * (event.deltaY > 0 ? 0.93 : 1.075), 0.72, 1.55);
+      this.resize();
+    }, { passive: false });
+  }
+
+  consumeCameraClick() {
+    if (!this.ignoreNextClick) return false;
+    this.ignoreNextClick = false;
+    return true;
+  }
+
+  panPixels(dx, dy) {
+    const rect = this.canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const unitsPerPixel = (12.2 / this.zoom) / rect.height;
+    const forward = new THREE.Vector3(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
+    const right = new THREE.Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw));
+    this.cameraTarget.addScaledVector(right, -dx * unitsPerPixel);
+    this.cameraTarget.addScaledVector(forward, -dy * unitsPerPixel);
+    this.clampTarget();
+    this.updateCamera();
+  }
+
+  panCamera(x, z) {
+    const step = 0.42 / this.zoom;
+    const forward = new THREE.Vector3(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
+    const right = new THREE.Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw));
+    this.cameraTarget.addScaledVector(right, x * step);
+    this.cameraTarget.addScaledVector(forward, z * step);
+    this.clampTarget();
+    this.updateCamera();
+  }
+
+  rotateCamera(delta) {
+    this.cameraYaw += delta;
+    this.updateCamera();
+  }
+
+  clampTarget() {
+    this.cameraTarget.x = THREE.MathUtils.clamp(this.cameraTarget.x, -4.8, 4.2);
+    this.cameraTarget.z = THREE.MathUtils.clamp(this.cameraTarget.z, -2.75, 2.75);
+  }
+
+  resetCamera() {
+    this.zoom = 1;
+    this.cameraYaw = 0.72;
+    this.cameraPitch = 0.72;
+    this.cameraTarget.set(-0.65, 0, 0.15);
+    this.resize();
+    this.updateCamera();
+  }
+
+  updateCamera() {
+    const horizontal = Math.cos(this.cameraPitch) * this.cameraDistance;
+    const base = new THREE.Vector3(
+      this.cameraTarget.x + Math.sin(this.cameraYaw) * horizontal,
+      Math.sin(this.cameraPitch) * this.cameraDistance,
+      this.cameraTarget.z + Math.cos(this.cameraYaw) * horizontal,
+    );
+    this.camera.position.copy(base);
+    this.camera.lookAt(this.cameraTarget);
+    this.camera.updateMatrixWorld();
+  }
+
+  kickCamera(power = 0.02) {
+    this.cameraShake = Math.min(0.09, this.cameraShake + power);
   }
 
   resize() {
@@ -87,7 +214,7 @@ export class Renderer {
     this.camera.left = -viewHeight * aspect / 2;
     this.camera.right = viewHeight * aspect / 2;
     this.camera.updateProjectionMatrix();
-    this.webgl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.webgl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
     this.webgl.setSize(width, height, false);
   }
 
@@ -113,13 +240,36 @@ export class Renderer {
     return toGame(hit);
   }
 
+  updateLighting(time) {
+    const boss = this.game.enemies.some((enemy) => enemy.def.boss && !enemy.dead);
+    const inWave = this.game.waveManager.active;
+    const clear = this.game.waveClearPulse || 0;
+    this.lights.hemisphere.intensity = 2.25 + (inWave ? 0.08 : 0) + clear * 0.22;
+    this.lights.key.intensity = 3.05 + (boss ? 0.25 : 0) + clear * 0.35;
+    this.lights.fill.intensity = 1.18 + (inWave ? 0.15 : 0);
+    this.lights.rim.intensity = 0.76 + (boss ? 0.42 : 0);
+    this.lights.nexus.intensity = 1.42 + this.game.nexusPulse * 2.1 + clear * 0.9;
+    this.lights.spawn.intensity = 1.25 + (this.game.spawnPulse || 0) * 1.45;
+    this.lights.spawn.position.y = 1.45 + Math.sin(time * 1.8) * 0.04;
+  }
+
   render(dt) {
     this.time += dt;
+    this.updateLighting(this.time);
     this.env.update(this.time, this.game.buildChoice, this.game.hoverPad, this.game.towers);
     this.towerArt.sync(this.time);
     this.enemyArt.sync(this.time);
     this.vfx.sync(this.time);
     this.syncDebug();
+    this.updateCamera();
+
+    if (this.cameraShake > 0.001) {
+      this.camera.position.x += (Math.random() - 0.5) * this.cameraShake;
+      this.camera.position.y += (Math.random() - 0.5) * this.cameraShake * 0.42;
+      this.camera.position.z += (Math.random() - 0.5) * this.cameraShake;
+      this.cameraShake *= Math.pow(0.08, dt);
+    }
+
     this.webgl.render(this.scene, this.camera);
   }
 
@@ -137,14 +287,14 @@ export class Renderer {
     const points = PATH.map((point) => toScene(point.x, point.y, 0.19));
     const path = new THREE.Line(
       new THREE.BufferGeometry().setFromPoints(points),
-      new THREE.LineBasicMaterial({ color: '#ffd773', transparent: true, opacity: 0.85, depthWrite: false }),
+      new THREE.LineBasicMaterial({ color: '#ffe08a', transparent: true, opacity: 0.9, depthWrite: false }),
     );
     root.add(path);
     for (const pad of BUILD_PADS) {
       const r = pad.r * 0.01;
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(r - 0.012, r + 0.012, 36),
-        new THREE.MeshBasicMaterial({ color: '#6effc0', transparent: true, opacity: 0.62, side: THREE.DoubleSide, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: '#6effc0', transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false }),
       );
       ring.rotation.x = -Math.PI / 2;
       ring.position.copy(toScene(pad.x, pad.y, 0.18));

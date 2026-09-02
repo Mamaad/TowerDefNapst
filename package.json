@@ -1,12 +1,12 @@
 {
   "name": "towerdefnapst",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Tower Defense fantasy élémentaire en Three.js/WebGL.",
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
-    "check": "node scripts/check-modules.mjs && node tests/core-smoke.mjs && node tests/render3d-smoke.mjs"
+    "check": "node scripts/check-modules.mjs && node tests/core-smoke.mjs && node tests/render3d-smoke.mjs && node tests/audio-smoke.mjs && node tests/battle-smoke.mjs"
   },
   "engines": {
     "node": ">=20"
