@@ -20,8 +20,10 @@ const tower={level:3,def:{element:'fire'},registerDamage(){}};
 surfaces.create('burning',500,355,{duration:.15,power:1.3,persistent:true,source:tower});
 surfaces.onElementHit({tower,enemy,element:'fire',dealt:80,kind:'meteor'});
 assert.ok(surfaces.stats.reactions>=1,'burning + poison must react');assert.ok(surfaceEvents>=1);
-for(let i=0;i<80;i++)surfaces.update(.1);
-assert.ok(surfaces.scars.length>=1,'persistent battlefield action must leave scars');assert.ok(surfaces.surfaces.length<=surfaces.maxSurfaces);
+// A heavy hit deliberately refreshes the burning surface. Expire a separate persistent scar candidate instead.
+surfaces.create('fractured',650,355,{duration:.12,power:1.3,persistent:true,source:tower});
+for(let i=0;i<20;i++)surfaces.update(.1);
+assert.ok(surfaces.scars.some(s=>s.type==='fractured'),'expired persistent battlefield action must leave a scar');assert.ok(surfaces.surfaces.length<=surfaces.maxSurfaces);
 
 const map=new MapStrategyManager(game,bus);const original=PATH.map(p=>[p.x,p.y]);assert.ok(map.announceRoute('breach'));assert.ok(map.applyPendingRoute());assert.equal(map.activeRoute,'breach');map.restoreStandard();assert.deepEqual(PATH.map(p=>[p.x,p.y]),original,'route reset must restore canonical path');assert.ok(map.lockedPads.size>0);const gold0=game.state.gold;assert.ok(map.activateShrine('flame'));assert.ok(game.state.gold<gold0);
 
