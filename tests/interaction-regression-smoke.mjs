@@ -8,6 +8,7 @@ import { performTowerUpgrade, performTowerSpecialization } from '../src/systems/
 import { MapStrategyManager } from '../src/systems/MapStrategyManager.js';
 import { TowerWorldManager } from '../src/systems/TowerWorldManager.js';
 import { EnemyWorldManager } from '../src/systems/EnemyWorldManager.js';
+import { installWorldLifecycleController } from '../src/systems/WorldLifecycleController.js';
 
 const state = new GameState('normal');
 state.gold = 5000;
@@ -82,4 +83,41 @@ const enemyWorld = new EnemyWorldManager({ enemies: [], towers: [], particles: {
 enemyWorld.onDeath({ splitDone: false, modifiers: new Set(), def: { boss: false } });
 assert.equal(deathEvents, 0, 'EnemyWorldManager must not double-emit ENEMY_KILLED; combat wrapper owns the event');
 
-console.log('Interaction regression smoke passed · upgrades, specialization refunds, pad neutralization, sabotage timing');
+let autoChoice = null;
+let prepared = 0;
+let persisted = 0;
+const lifecycleGame = {
+  state: { campaignComplete: true, endless: false },
+  ui: { toast() {} },
+  persistScore() { persisted++; },
+  campaignComplete() { this.state.campaignComplete = true; },
+  continueEndless() { this.state.campaignComplete = false; this.state.endless = true; },
+  waveManager: {
+    queue: [{}, {}, {}], pending: 3,
+    start() { return true; },
+    spawn() { this.queue.shift(); return {}; },
+    enqueueEscort() { this.queue.push({}); },
+  },
+  world: {
+    preparedWave: 30,
+    director: {
+      waveChoice: { selected: null, options: [{ id: 'rapid', name: 'ASSAUT RAPIDE' }, { id: 'titans', name: 'TITANS' }] },
+      chooseWave(id) { autoChoice = id; this.waveChoice.selected = id; return true; },
+    },
+    hud: { hideModal() {}, sync() {} },
+    prepareNextWave() { prepared++; },
+  },
+};
+installWorldLifecycleController(lifecycleGame);
+assert.equal(lifecycleGame.waveManager.start(false), true);
+assert.equal(autoChoice, 'rapid', 'auto wave start must resolve an unanswered choice instead of reopening a modal every frame');
+lifecycleGame.waveManager.spawn('grunt');
+assert.equal(lifecycleGame.waveManager.pending, 2, 'pending enemy count must track remaining spawn queue');
+lifecycleGame.waveManager.enqueueEscort('swift', 1);
+assert.equal(lifecycleGame.waveManager.pending, 3, 'escort enqueue must refresh pending count');
+lifecycleGame.continueEndless();
+assert.equal(prepared, 1, 'campaign -> Endless must prepare a fresh World plan');
+lifecycleGame.campaignComplete();
+assert.equal(persisted, 1, 'campaign completion wrapper must persist post-World bonuses');
+
+console.log('Interaction regression smoke passed · upgrades, specialization refunds, pad neutralization, sabotage timing, Endless lifecycle');

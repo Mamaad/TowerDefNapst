@@ -1,6 +1,7 @@
 import { Game } from './core/Game.js';
 import { WorldStrategyManager } from './systems/WorldStrategyManager.js';
 import { installTowerInteractionController } from './systems/TowerInteractionController.js';
+import { installWorldLifecycleController } from './systems/WorldLifecycleController.js';
 
 const style = document.createElement('link');
 style.rel = 'stylesheet';
@@ -11,6 +12,7 @@ const canvas = document.getElementById('game');
 const game = new Game(canvas);
 game.world = new WorldStrategyManager(game);
 installTowerInteractionController(game);
+installWorldLifecycleController(game);
 
 const subtitle = document.querySelector('.brand small');
 if (subtitle) subtitle.textContent = 'WORLD & STRATEGY UPDATE';
