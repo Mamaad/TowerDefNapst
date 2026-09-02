@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0b1512" />
-  <title>TowerDefNapst — Arcane Bastion 3D</title>
+  <meta name="theme-color" content="#173126" />
+  <title>TowerDefNapst — The Battlefield Update</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./styles-3d.css" />
+  <link rel="stylesheet" href="./styles-battlefield.css" />
   <script type="importmap">
     {
       "imports": {
@@ -22,7 +23,7 @@
         <canvas id="game" aria-label="Champ de bataille 3D TowerDefNapst"></canvas>
 
         <header class="hud" aria-label="État de la partie">
-          <div class="brand"><span class="brand-mark" id="brandIcon"></span><div><strong>ARCANE BASTION</strong><small>THREE.JS EDITION</small></div></div>
+          <div class="brand"><span class="brand-mark" id="brandIcon"></span><div><strong>ARCANE BASTION</strong><small>THE BATTLEFIELD UPDATE</small></div></div>
           <div class="resource-ribbon">
             <div class="resource" data-tone="life"><span class="resource-icon" id="lifeIcon"></span><div><small>VIES</small><b id="lives">30</b></div></div>
             <div class="resource" data-tone="gold"><span class="resource-icon" id="goldIcon"></span><div><small>OR</small><b id="gold">550</b></div></div>
@@ -32,19 +33,39 @@
           </div>
           <div class="hud-actions">
             <button id="pauseBtn" class="icon-button" aria-label="Pause" title="Pause (Espace)"></button>
-            <button id="cameraBtn" class="icon-button" aria-label="Réinitialiser la caméra" title="Réinitialiser la caméra (R)"></button>
+            <button id="cameraBtn" class="icon-button" aria-label="Recentrer la caméra" title="Recentrer la caméra (Home)"></button>
+            <div class="camera-presets" aria-label="Presets caméra">
+              <button type="button" data-camera-preset="gameplay" class="active" title="Gameplay (Z)">G</button>
+              <button type="button" data-camera-preset="tactical" title="Tactique (X)">T</button>
+              <button type="button" data-camera-preset="close" title="Combat rapproché (C)">C</button>
+            </div>
+            <button id="photoBtn" class="photo-button" type="button" title="Photo Mode (F10)">PHOTO</button>
             <div class="speed-group" aria-label="Vitesse"><button data-speed="1" class="active">×1</button><button data-speed="2">×2</button><button data-speed="3">×3</button></div>
-            <button id="waveBtn" class="wave-cta"><span class="cta-icon" id="playIcon"></span><span><small>PROCHAINE</small><strong>LANCER VAGUE</strong></span><em id="waveBonus">+102 OR</em></button>
+            <button id="waveBtn" class="wave-cta"><span class="cta-icon" id="playIcon"></span><span><small id="waveCtaKicker">PROCHAINE</small><strong>LANCER VAGUE</strong></span><em id="waveBonus">+102 OR</em></button>
           </div>
         </header>
 
         <div class="engine-badge"><i></i><span>THREE.JS · WEBGL</span></div>
-        <div id="bossHud" class="boss-hud hidden"><div class="boss-heading"><span>MENACE MAJEURE</span><strong id="bossName">Archonte du Nexus</strong></div><div class="boss-track"><i id="bossHealth"></i></div><small id="bossValue"></small></div>
+        <div id="photoBadge" class="photo-badge hidden"><strong>PHOTO MODE</strong><small>CAMÉRA LIBRE · HUD MASQUÉ · F10 POUR QUITTER</small></div>
+
+        <div id="bossHud" class="boss-hud hidden">
+          <div class="boss-heading"><span>MENACE MAJEURE</span><strong id="bossName">Archonte du Nexus</strong><em id="bossPhase">PHASE I</em></div>
+          <div class="boss-track"><i id="bossHealth"></i></div>
+          <div class="boss-meta"><small id="bossValue"></small><span id="bossArmor"></span></div>
+        </div>
+
         <div id="waveBanner" class="wave-banner"><span id="waveBannerKicker">VAGUE</span><strong id="waveBannerTitle"></strong><small id="waveBannerSubtitle"></small></div>
         <div id="toast" class="toast"></div>
         <div id="debug" class="debug-panel hidden"></div>
         <div id="padHud" class="pad-hud hidden"><small id="padHudKicker">SOCLE TACTIQUE</small><strong id="padHudTitle"></strong><span id="padHudMeta"></span></div>
-        <div class="help-chip"><kbd>Drag</kbd> tourner <span></span><kbd>Shift+drag</kbd> déplacer <span></span><kbd>WASD</kbd> pan <span></span><kbd>Q/E</kbd> rotation <span></span><kbd>R</kbd> reset <span></span><kbd>Molette</kbd> zoom</div>
+
+        <section id="wavePreview" class="wave-preview" aria-label="Aperçu de la prochaine vague">
+          <div class="wave-preview-heading"><span>RENSEIGNEMENT</span><strong id="nextWaveName">VAGUE 1</strong><small id="nextWaveTimer">PRÊTE</small></div>
+          <div id="nextWaveUnits" class="wave-preview-units"></div>
+          <div id="nextWaveHint" class="wave-preview-hint"></div><label class="difficulty-control"><span>DIFFICULTÉ</span><select id="difficultySelect"><option value="normal">Normal</option><option value="veteran">Veteran</option><option value="nightmare">Nightmare</option></select></label>
+        </section>
+
+        <div class="help-chip"><kbd>Drag</kbd> rotation contrôlée <span></span><kbd>Shift/Middle</kbd> pan <span></span><kbd>WASD</kbd> déplacement <span></span><kbd>Q/E</kbd> yaw <span></span><kbd>Home</kbd> recentrer <span></span><kbd>F10</kbd> photo <span></span><kbd>Molette</kbd> zoom</div>
 
         <aside class="side-panel">
           <div class="panel-header"><div><small>DÉFENSES</small><strong>Arsenal élémentaire</strong></div><span class="panel-rune" id="panelRune"></span></div>
@@ -57,20 +78,27 @@
             <div class="tower-selection hidden">
               <div class="tower-identity"><div id="towerPortrait" class="tower-portrait"></div><div><span id="towerElement" class="element-pill"></span><h2 id="towerName"></h2><small id="towerLevel"></small></div></div>
               <p id="towerDescription" class="tower-description"></p>
-              <div class="metrics"><div><small>DÉGÂTS</small><b id="towerDamage"></b></div><div><small>DPS</small><b id="towerDps"></b></div><div><small>PORTÉE</small><b id="towerRange"></b></div><div><small>CADENCE</small><b id="towerRate"></b></div></div>
+              <div class="metrics"><div><small>DÉGÂTS</small><b id="towerDamage"></b></div><div><small>DPS RÉCENT</small><b id="towerDps"></b></div><div><small>PORTÉE</small><b id="towerRange"></b></div><div><small>CADENCE</small><b id="towerRate"></b></div></div>
               <div class="special"><span>TRAIT</span><p id="towerSpecial"></p></div>
+              <div id="towerBattleStats" class="tower-battle-stats"></div>
               <label class="targeting"><span><i id="targetIcon"></i> PRIORITÉ</span><select id="targetSelect"><option value="first">Premier</option><option value="last">Dernier</option><option value="strong">Plus fort</option><option value="weak">Plus faible</option><option value="closest">Plus proche</option></select></label>
+              <div id="upgradePreview" class="upgrade-preview hidden"><small>APRÈS AMÉLIORATION</small><div id="upgradePreviewStats"></div></div><div id="specializationPanel" class="specialization-panel hidden"><small>SPÉCIALISATION NIVEAU III</small><div id="specializationChoices"></div></div>
               <div class="tower-actions"><button id="upgradeBtn" class="action-primary"></button><button id="sellBtn" class="action-secondary"></button></div>
             </div>
           </section>
 
-          <section class="audio-strip"><button id="muteBtn" class="audio-button" aria-label="Audio"></button><label>Musique<input id="musicVolume" type="range" min="0" max="1" step="0.05" value="0.3" /></label><label>SFX<input id="sfxVolume" type="range" min="0" max="1" step="0.05" value="0.65" /></label></section>
+          <section class="audio-strip battlefield-options">
+            <button id="muteBtn" class="audio-button" aria-label="Audio"></button>
+            <label>Musique<input id="musicVolume" type="range" min="0" max="1" step="0.05" value="0.42" /></label>
+            <label>SFX<input id="sfxVolume" type="range" min="0" max="1" step="0.05" value="0.7" /></label>
+            <label>Shake<input id="cameraShake" type="range" min="0" max="1" step="0.05" value="0.55" /></label>
+          </section>
         </aside>
       </section>
     </main>
 
     <div id="gameOver" class="modal hidden">
-      <div class="modal-card"><span class="defeat-mark" id="defeatIcon"></span><small id="gameOverKicker">LE NEXUS EST TOMBÉ</small><h1 id="gameOverTitle">DÉFAITE</h1><div id="gameOverStats" class="end-stats"></div><button id="restartBtn" class="restart-button">RECOMMENCER</button></div>
+      <div class="modal-card"><span class="defeat-mark" id="defeatIcon"></span><small id="gameOverKicker">LE NEXUS EST TOMBÉ</small><h1 id="gameOverTitle">DÉFAITE</h1><div id="gameOverStats" class="end-stats"></div><div class="end-actions"><button id="endlessBtn" class="endless-button hidden">CONTINUER EN ENDLESS</button><button id="restartBtn" class="restart-button">RECOMMENCER</button></div></div>
     </div>
   </div>
   <script type="module" src="./src/main.js"></script>

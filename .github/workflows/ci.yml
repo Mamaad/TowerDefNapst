@@ -23,8 +23,10 @@ jobs:
             fi
             sleep 1
           done
-          grep -q "THREE.JS EDITION" /tmp/index.html
+          grep -q "THE BATTLEFIELD UPDATE" /tmp/index.html
           curl --fail --silent http://127.0.0.1:4425/src/main.js -o /tmp/main.js
           grep -q "new Game" /tmp/main.js
           curl --fail --silent http://127.0.0.1:4425/src/render/Renderer.js -o /tmp/renderer.js
           grep -q "new THREE.WebGLRenderer" /tmp/renderer.js
+          curl --fail --silent http://127.0.0.1:4425/src/render/CameraController.js -o /tmp/camera.js
+          grep -q "GAMEPLAY_PITCH_MIN" /tmp/camera.js

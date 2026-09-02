@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { PATH, BUILD_PADS } from '../config/map.js';
 import { EnvironmentRenderer } from './EnvironmentRenderer.js';
-import { TowerRenderer } from './TowerRenderer.js';
-import { EnemyRenderer } from './EnemyRenderer.js';
+import { BattlefieldLayer } from './BattlefieldLayer.js';
+import { BattlefieldTowerRenderer } from './BattlefieldTowerRenderer.js';
+import { BattlefieldEnemyRenderer } from './BattlefieldEnemyRenderer.js';
 import { VfxRenderer } from './VfxRenderer.js';
+import { CameraController } from './CameraController.js';
 import { toScene, toGame, disposeObject } from './drawing.js';
 
 export class Renderer {
@@ -11,24 +13,26 @@ export class Renderer {
     this.game = game;
     this.canvas = canvas;
     this.time = 0;
-    this.zoom = 1;
-    this.cameraYaw = 0.72;
-    this.cameraPitch = 0.72;
-    this.cameraDistance = 18;
-    this.cameraTarget = new THREE.Vector3(-0.65, 0, 0.15);
-    this.cameraShake = 0;
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.debugRoot = null;
     this.cameraGesture = null;
     this.ignoreNextClick = false;
+    this._impactScene = new THREE.Vector3();
+    this._anchorScene = new THREE.Vector3();
+    this._clearColor = new THREE.Color('#2f6048');
+    this._waveColor = new THREE.Color('#315d48');
+    this._bossColor = new THREE.Color('#4d4a50');
+    this._fogClear = new THREE.Color('#5a7660');
+    this._fogBoss = new THREE.Color('#6a596a');
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#1b392d');
-    this.scene.fog = new THREE.FogExp2('#294b3a', 0.018);
+    this.scene.background = this._clearColor.clone();
+    this.scene.fog = new THREE.FogExp2(this._fogClear, 0.0125);
 
     this.camera = new THREE.OrthographicCamera(-10, 10, 6, -6, 0.1, 80);
+    this.cameraRig = new CameraController(this.camera);
 
     this.webgl = new THREE.WebGLRenderer({
       canvas,
@@ -38,14 +42,15 @@ export class Renderer {
     });
     this.webgl.outputColorSpace = THREE.SRGBColorSpace;
     this.webgl.toneMapping = THREE.ACESFilmicToneMapping;
-    this.webgl.toneMappingExposure = 1.34;
+    this.webgl.toneMappingExposure = 1.42;
     this.webgl.shadowMap.enabled = true;
     this.webgl.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.setupLights();
     this.env = new EnvironmentRenderer(game, this.scene);
-    this.towerArt = new TowerRenderer(game, this.scene);
-    this.enemyArt = new EnemyRenderer(game, this.scene, this.camera);
+    this.battlefield = new BattlefieldLayer(game, this.scene);
+    this.towerArt = new BattlefieldTowerRenderer(game, this.scene);
+    this.enemyArt = new BattlefieldEnemyRenderer(game, this.scene, this.camera);
     this.vfx = new VfxRenderer(game, this.scene, this.camera);
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -53,14 +58,19 @@ export class Renderer {
     window.addEventListener('resize', () => this.resize(), { passive: true });
     this.bindCameraControls();
     this.resize();
-    this.updateCamera();
+    this.cameraRig.applyPreset('gameplay', true);
+    this.cameraRig.update(0);
   }
+
+  get cameraYaw() { return this.cameraRig.yaw; }
+  get cameraPitch() { return this.cameraRig.pitch; }
+  get zoom() { return this.cameraRig.zoom; }
 
   setupLights() {
     this.lights = {};
-    const ambient = new THREE.AmbientLight('#d8ecd9', 0.56);
-    const hemisphere = new THREE.HemisphereLight('#f4f7df', '#365b42', 2.25);
-    const key = new THREE.DirectionalLight('#fff0cf', 3.05);
+    const ambient = new THREE.AmbientLight('#edf6e4', 0.62);
+    const hemisphere = new THREE.HemisphereLight('#fff8dc', '#4d704f', 2.38);
+    const key = new THREE.DirectionalLight('#fff0cc', 3.2);
     key.position.set(-6.5, 13.5, 7.5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -70,16 +80,17 @@ export class Renderer {
     key.shadow.camera.bottom = -8;
     key.shadow.camera.near = 1;
     key.shadow.camera.far = 36;
-    key.shadow.bias = -0.00055;
+    key.shadow.bias = -0.0005;
+    key.shadow.normalBias = 0.018;
 
-    const fill = new THREE.DirectionalLight('#a9d9ff', 1.18);
+    const fill = new THREE.DirectionalLight('#b9e5ff', 1.32);
     fill.position.set(7, 8, 4);
-    const rim = new THREE.DirectionalLight('#d5b6ff', 0.76);
+    const rim = new THREE.DirectionalLight('#efc8ff', 0.86);
     rim.position.set(5, 6, -10);
 
-    const spawn = new THREE.PointLight('#7ff2bb', 1.25, 4.4, 2);
+    const spawn = new THREE.PointLight('#8cffc8', 1.18, 4.1, 2);
     spawn.position.copy(toScene(PATH[0].x, PATH[0].y, 1.45));
-    const nexus = new THREE.PointLight('#c78cff', 1.42, 4.8, 2);
+    const nexus = new THREE.PointLight('#dda8ff', 1.34, 4.4, 2);
     nexus.position.copy(toScene(PATH.at(-1).x, PATH.at(-1).y, 1.6));
 
     this.scene.add(ambient, hemisphere, key, fill, rim, spawn, nexus);
@@ -88,8 +99,9 @@ export class Renderer {
 
   bindCameraControls() {
     const start = (event) => {
-      const rotate = event.button === 2 || event.button === 1 || (event.button === 0 && event.altKey) || (event.button === 0 && !event.shiftKey && !this.game.buildChoice && !this.game.hoverPad);
-      const pan = event.button === 0 && event.shiftKey;
+      const pan = event.button === 1 || (event.button === 0 && event.shiftKey);
+      const rotate = event.button === 2 || (event.button === 0 && event.altKey) ||
+        (event.button === 0 && !event.shiftKey && !this.game.buildChoice && !this.game.hoverPad && !this.game.selectedTower);
       if (!rotate && !pan) return;
       event.preventDefault();
       this.cameraGesture = {
@@ -111,13 +123,8 @@ export class Renderer {
       gesture.x = event.clientX;
       gesture.y = event.clientY;
       if (Math.abs(dx) + Math.abs(dy) > 2) gesture.moved = true;
-      if (gesture.mode === 'rotate') {
-        this.cameraYaw -= dx * 0.0062;
-        this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + dy * 0.0048, 0.48, 1.18);
-        this.updateCamera();
-      } else {
-        this.panPixels(dx, dy);
-      }
+      if (gesture.mode === 'rotate') this.cameraRig.dragRotate(dx, dy);
+      else this.cameraRig.dragPan(dx, dy, this.canvas.getBoundingClientRect().height);
     };
 
     const end = (event) => {
@@ -135,8 +142,15 @@ export class Renderer {
     this.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     this.canvas.addEventListener('wheel', (event) => {
       event.preventDefault();
-      this.zoom = THREE.MathUtils.clamp(this.zoom * (event.deltaY > 0 ? 0.93 : 1.075), 0.72, 1.55);
-      this.resize();
+      let anchor = null;
+      if (!this.game.photoMode) {
+        const gamePoint = this.screenToWorld(event.clientX, event.clientY);
+        if (gamePoint) {
+          this._anchorScene.copy(toScene(gamePoint.x, gamePoint.y, 0));
+          anchor = this._anchorScene;
+        }
+      }
+      this.cameraRig.zoomBy(event.deltaY, anchor);
     }, { passive: false });
   }
 
@@ -147,75 +161,73 @@ export class Renderer {
   }
 
   panPixels(dx, dy) {
-    const rect = this.canvas.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const unitsPerPixel = (12.2 / this.zoom) / rect.height;
-    const forward = new THREE.Vector3(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
-    const right = new THREE.Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw));
-    this.cameraTarget.addScaledVector(right, -dx * unitsPerPixel);
-    this.cameraTarget.addScaledVector(forward, -dy * unitsPerPixel);
-    this.clampTarget();
-    this.updateCamera();
+    this.cameraRig.dragPan(dx, dy, this.canvas.getBoundingClientRect().height);
   }
 
   panCamera(x, z) {
-    const step = 0.42 / this.zoom;
-    const forward = new THREE.Vector3(Math.sin(this.cameraYaw), 0, Math.cos(this.cameraYaw));
-    const right = new THREE.Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw));
-    this.cameraTarget.addScaledVector(right, x * step);
-    this.cameraTarget.addScaledVector(forward, z * step);
-    this.clampTarget();
-    this.updateCamera();
+    this.cameraRig.setMoveInput(x, z);
+  }
+
+  setMoveInput(x, z) {
+    this.cameraRig.setMoveInput(x, z);
   }
 
   rotateCamera(delta) {
-    this.cameraYaw += delta;
-    this.updateCamera();
+    this.cameraRig.rotateStep(delta);
   }
 
-  clampTarget() {
-    this.cameraTarget.x = THREE.MathUtils.clamp(this.cameraTarget.x, -4.8, 4.2);
-    this.cameraTarget.z = THREE.MathUtils.clamp(this.cameraTarget.z, -2.75, 2.75);
+  setCameraPreset(name) {
+    this.cameraRig.applyPreset(name, false);
   }
 
   resetCamera() {
-    this.zoom = 1;
-    this.cameraYaw = 0.72;
-    this.cameraPitch = 0.72;
-    this.cameraTarget.set(-0.65, 0, 0.15);
-    this.resize();
-    this.updateCamera();
+    this.cameraRig.applyPreset('gameplay', false);
   }
 
-  updateCamera() {
-    const horizontal = Math.cos(this.cameraPitch) * this.cameraDistance;
-    const base = new THREE.Vector3(
-      this.cameraTarget.x + Math.sin(this.cameraYaw) * horizontal,
-      Math.sin(this.cameraPitch) * this.cameraDistance,
-      this.cameraTarget.z + Math.cos(this.cameraYaw) * horizontal,
-    );
-    this.camera.position.copy(base);
-    this.camera.lookAt(this.cameraTarget);
-    this.camera.updateMatrixWorld();
+  recenterCamera() {
+    this.cameraRig.recenter();
   }
 
-  kickCamera(power = 0.02) {
-    this.cameraShake = Math.min(0.09, this.cameraShake + power);
+  setPhotoMode(enabled) {
+    this.cameraRig.setPhotoMode(enabled);
+  }
+
+  setCameraShake(value) {
+    this.cameraRig.setShakeAmount(value);
+  }
+
+  focusOn(x, y, duration = 0.62, zoom = 1.08) {
+    this._impactScene.copy(toScene(x, y, 0));
+    this.cameraRig.focusOn(this._impactScene, duration, zoom);
+  }
+
+  kickCamera(power = 0.02, x = null, y = null) {
+    let impact = null;
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      this._impactScene.copy(toScene(x, y, 0));
+      impact = this._impactScene;
+    }
+    this.cameraRig.addShake(power, impact);
   }
 
   resize() {
     const rect = this.canvas.getBoundingClientRect();
     const width = Math.max(320, Math.round(rect.width || window.innerWidth));
     const height = Math.max(240, Math.round(rect.height || window.innerHeight));
-    const aspect = width / height;
-    const viewHeight = 12.2 / this.zoom;
+    this.cameraRig.setAspect(width / height);
+    this.updateProjection();
+    this.webgl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
+    this.webgl.setSize(width, height, false);
+  }
+
+  updateProjection() {
+    const viewHeight = this.cameraRig.viewHeight;
+    const aspect = this.cameraRig.aspect;
     this.camera.top = viewHeight / 2;
     this.camera.bottom = -viewHeight / 2;
     this.camera.left = -viewHeight * aspect / 2;
     this.camera.right = viewHeight * aspect / 2;
     this.camera.updateProjectionMatrix();
-    this.webgl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
-    this.webgl.setSize(width, height, false);
   }
 
   setPointer(clientX, clientY) {
@@ -235,42 +247,66 @@ export class Renderer {
 
   screenToWorld(clientX, clientY) {
     if (!this.setPointer(clientX, clientY)) return null;
-    const hit = new THREE.Vector3();
-    if (!this.raycaster.ray.intersectPlane(this.groundPlane, hit)) return null;
-    return toGame(hit);
+    if (!this.raycaster.ray.intersectPlane(this.groundPlane, this._impactScene)) return null;
+    return toGame(this._impactScene);
   }
 
   updateLighting(time) {
-    const boss = this.game.enemies.some((enemy) => enemy.def.boss && !enemy.dead);
+    const boss = this.game.enemies.find((enemy) => enemy.def.boss && !enemy.dead);
     const inWave = this.game.waveManager.active;
     const clear = this.game.waveClearPulse || 0;
-    this.lights.hemisphere.intensity = 2.25 + (inWave ? 0.08 : 0) + clear * 0.22;
-    this.lights.key.intensity = 3.05 + (boss ? 0.25 : 0) + clear * 0.35;
-    this.lights.fill.intensity = 1.18 + (inWave ? 0.15 : 0);
-    this.lights.rim.intensity = 0.76 + (boss ? 0.42 : 0);
-    this.lights.nexus.intensity = 1.42 + this.game.nexusPulse * 2.1 + clear * 0.9;
-    this.lights.spawn.intensity = 1.25 + (this.game.spawnPulse || 0) * 1.45;
+    const lateGame = Math.min(1, this.game.state.wave / 30);
+    const bossPulse = boss ? 1 : 0;
+
+    this.lights.ambient.intensity = 0.62 + clear * 0.08;
+    this.lights.hemisphere.intensity = 2.38 + (inWave ? 0.08 : 0) + clear * 0.2;
+    this.lights.key.intensity = 3.2 + clear * 0.28 + bossPulse * 0.12;
+    this.lights.fill.intensity = 1.32 + (inWave ? 0.12 : 0.02);
+    this.lights.rim.intensity = 0.86 + bossPulse * 0.34;
+    this.lights.nexus.intensity = 1.34 + this.game.nexusPulse * 2.0 + clear * 0.7;
+    this.lights.spawn.intensity = 1.18 + (this.game.spawnPulse || 0) * 1.3 + (this.game.spawnCharge || 0) * 0.85;
     this.lights.spawn.position.y = 1.45 + Math.sin(time * 1.8) * 0.04;
+
+    const targetBg = boss ? this._bossColor : inWave ? this._waveColor : this._clearColor;
+    this.scene.background.lerp(targetBg, 0.025);
+    this.scene.fog.color.lerp(boss ? this._fogBoss : this._fogClear, 0.025);
+    this.scene.fog.density = 0.0125 + lateGame * 0.001 + bossPulse * 0.0015;
+    this.webgl.toneMappingExposure = 1.42 + clear * 0.05 - bossPulse * 0.025;
   }
 
   render(dt) {
     this.time += dt;
+    this.cameraRig.update(dt);
+    if (this.cameraRig.consumeProjectionDirty()) this.updateProjection();
     this.updateLighting(this.time);
     this.env.update(this.time, this.game.buildChoice, this.game.hoverPad, this.game.towers);
+    this.battlefield.update(this.time);
     this.towerArt.sync(this.time);
     this.enemyArt.sync(this.time);
     this.vfx.sync(this.time);
     this.syncDebug();
-    this.updateCamera();
-
-    if (this.cameraShake > 0.001) {
-      this.camera.position.x += (Math.random() - 0.5) * this.cameraShake;
-      this.camera.position.y += (Math.random() - 0.5) * this.cameraShake * 0.42;
-      this.camera.position.z += (Math.random() - 0.5) * this.cameraShake;
-      this.cameraShake *= Math.pow(0.08, dt);
-    }
-
     this.webgl.render(this.scene, this.camera);
+  }
+
+  getDebugStats() {
+    const info = this.webgl.info;
+    let meshes = 0;
+    let lights = 0;
+    if (this.game.debug) {
+      this.scene.traverse((node) => {
+        if (node.isMesh || node.isPoints || node.isLine) meshes += 1;
+        if (node.isLight) lights += 1;
+      });
+    }
+    return {
+      calls: info.render.calls,
+      triangles: info.render.triangles,
+      geometries: info.memory.geometries,
+      textures: info.memory.textures,
+      meshes,
+      lights,
+      camera: this.cameraRig.debug(),
+    };
   }
 
   syncDebug() {

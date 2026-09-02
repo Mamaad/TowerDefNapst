@@ -1,12 +1,12 @@
 {
   "name": "towerdefnapst",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
-  "description": "Tower Defense fantasy élémentaire en Three.js/WebGL.",
+  "description": "Tower Defense fantasy élémentaire Three.js — The Battlefield Update.",
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
-    "check": "node scripts/check-modules.mjs && node tests/core-smoke.mjs && node tests/render3d-smoke.mjs && node tests/audio-smoke.mjs && node tests/battle-smoke.mjs"
+    "check": "node scripts/check-modules.mjs && node tests/core-smoke.mjs && node tests/render3d-smoke.mjs && node tests/audio-smoke.mjs && node tests/battle-smoke.mjs && node tests/battlefield-gameplay-smoke.mjs && node tests/battlefield-update-smoke.mjs && node tests/campaign-smoke.mjs && node tests/final-qa-smoke.mjs"
   },
   "engines": {
     "node": ">=20"
